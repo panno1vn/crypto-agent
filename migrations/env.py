@@ -18,11 +18,14 @@ from data_pipeline.models import Base  # noqa: E402
 config = context.config
 
 # 3. construc DATABASE_URL dynamic  from env variable
-db_user = os.getenv("POSTGRES_USER", "admin")
-db_password = os.getenv("POSTGRES_PASSWORD", "admin123")
+db_user = os.getenv("POSTGRES_USER")
+db_password = os.getenv("POSTGRES_PASSWORD")
 db_host = os.getenv("POSTGRES_HOST", "localhost")
 db_port = os.getenv("POSTGRES_PORT", "5432")
 db_name = os.getenv("POSTGRES_DB", "crypto_agent")
+
+if not db_user or not db_password:
+    raise ValueError("ERROR")
 
 DATABASE_URL = (
     f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
@@ -35,8 +38,7 @@ config.set_main_option("sqlalchemy.url", DATABASE_URL)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.override
-
+target_metadata = Base.metadata
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")

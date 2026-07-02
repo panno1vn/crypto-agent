@@ -3,7 +3,6 @@ channels:
   english:
     - "whale_alert"
     - "coingape"
-    - "CryptoComNews"
     - "bitcoinist_com"
     - "Cointelegraph"
     - "binance_announcements"
@@ -12,5 +11,4 @@ channels:
     - "Coin68News"         # Tin tức cực nhanh tại VN
     - "TapchiBitcoin"      # Kênh tin tức truyền thống
     - "saigontradecoin"    # Cộng đồng trade lớn
-    - "marginbmt"          # Kênh call kèo/tin tức khá nổi
     - "hiddengemteam"      # Chuyên săn gem/tin tức altcoin

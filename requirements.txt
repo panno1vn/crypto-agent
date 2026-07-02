@@ -1,0 +1,62 @@
+# alembic==1.14.1
+annotated-types==0.7.0
+asyncpg==0.30.0
+black==24.1.1
+cfgv==3.5.0
+click==8.4.2
+distlib==0.4.3
+filelock==3.29.4
+flake8==7.3.0
+greenlet==3.5.2
+identify==2.6.19
+isort==8.0.1
+Mako==1.3.12
+MarkupSafe==3.0.3
+mccabe==0.7.0
+mypy_extensions==1.1.0
+nodeenv==1.10.0
+packaging==26.2
+pathspec==1.1.1
+platformdirs==4.10.0
+pre_commit==4.6.0
+pyaes==1.6.1
+pyasn1==0.6.3
+pycodestyle==2.14.0
+pydantic==2.6.0
+pydantic_core==2.46.4
+pyflakes==3.4.0
+python-discovery==1.4.2
+python-dotenv==1.2.2
+pytokens==0.4.1
+PyYAML==6.0.3
+rsa==4.9.1
+SQLAlchemy==2.0.51
+Telethon==1.44.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+virtualenv==21.5.1
+# Thêm những dòng này vào cuối file requirements.txt của bạn
+
+# Airflow core
+apache-airflow==2.8.0
+
+# Cryptography — cần cho Fernet key (AIRFLOW__CORE__FERNET_KEY)
+cryptography==42.0.0
+
+# PostgreSQL driver — Airflow cần nó để connect vào Postgres qua SQLAlchemy
+psycopg[binary]==3.2.1
+
+# Binance API — cần cho ngày 6-7
+python-binance==1.0.19
+
+# Technical Analysis — cần cho ngày 8
+pandas==2.2.0
+numpy==1.26.4
+pandas-ta==0.3.14b0
+
+# Language detection — thấy trong historical_scraper.py ngày 4 nhưng không có trong list
+langdetect==1.0.9
+
+# LLM/RAG — chuẩn bị cho tuần 3-4
+sentence-transformers==3.0.1
+chromadb==0.5.5
