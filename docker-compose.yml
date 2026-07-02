@@ -9,10 +9,63 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-crypto_agent}
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+    
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_DB:-crypto_agent},airflow_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Mount script init vào đúng thư mục Postgres tự quét lúc khởi tạo.
+      - ./scripts/init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh
+    # FIX #4: healthcheck — để Airflow biết CHẮC Postgres đã sẵn sàng
+    # nhận connection, không chỉ là container đã "start".
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-crypto_agent}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  airflow:
+    # FIX #3: build từ Dockerfile riêng thay vì dùng thẳng image gốc,
+    # để cài đủ dependency (asyncpg, telethon, python-binance, ...)
+    # cho code thật trong data_pipeline/ chạy được bên trong DAG.
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: crypto_airflow
+    restart: always
+    command: standalone
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow_db
+      # FIX #1: mặc định Airflow dùng SequentialExecutor (chạy 1 task
+      # tại 1 thời điểm, thường đi kèm SQLite). Dù backend đã là Postgres,
+      # KHÔNG set executor thì Airflow vẫn tự chọn SequentialExecutor.
+      # LocalExecutor cho phép chạy nhiều task song song trên cùng máy —
+      # cần thiết từ ngày 13 trở đi khi có nhiều DAG chạy đồng thời.
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      # FIX #6 (nhỏ): cố định Fernet key thay vì để standalone tự sinh
+      # ngẫu nhiên mỗi lần container bị recreate. Nếu không set, mọi
+      # Connection/Variable bạn lưu trong Airflow UI (vd: Binance API key
+      # lưu dưới dạng Airflow Connection ở tuần 7) sẽ KHÔNG decrypt được
+      # nữa sau khi container restart với key mới.
+      # Generate 1 lần: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      # Mount code project thật vào container để DAG import được
+      # (vd: from data_pipeline.binance.ohlcv_pipeline import ...)
+      - ./data_pipeline:/opt/airflow/data_pipeline
+      # FIX #5 (nhỏ): mount logs ra host để không mất log khi container
+      # bị recreate (vd: sau docker-compose down/up hoặc rebuild image).
+      - ./logs/airflow:/opt/airflow/logs
+    depends_on:
+      # FIX #4 (tiếp): chờ đến khi Postgres thực sự "healthy",
+      # không chỉ chờ container start xong.
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

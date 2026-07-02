@@ -1,0 +1,20 @@
+# Dockerfile.airflow
+#
+# LÝ DO CẦN FILE NÀY:
+# Image gốc `apache/airflow:2.8.0` chỉ có Airflow core, KHÔNG có
+# asyncpg / telethon / python-binance / pydantic v2 / ... mà code
+# trong data_pipeline/ của mình cần.
+#
+# Nếu chỉ mount ./dags vào container (như docker-compose cũ), DAG có thể
+# `import` được nhưng sẽ ImportError ngay khi chạm tới code thật ở ngày 13
+# (lưu indicators) hoặc bất cứ lúc nào DAG gọi vào data_pipeline/.
+#
+# Giải pháp: build image riêng, kế thừa từ image gốc, cài requirements.txt
+# của chính project (dùng chung 1 file requirements.txt cho cả app lẫn Airflow
+# để tránh version mismatch).
+
+FROM apache/airflow:2.8.0
+
+COPY requirements-airflow.txt /requirements-airflow.txt
+
+RUN pip install --no-cache-dir --user -r /requirements-airflow.txt
