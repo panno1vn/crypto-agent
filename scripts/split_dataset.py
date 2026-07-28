@@ -5,10 +5,10 @@ Split labeled dataset (Label Studio export, project crypto sentiment)
 thành train/val/test, stratified theo nhãn.
 """
 
-import json
 import argparse
-from pathlib import Path
+import json
 from collections import Counter
+from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
@@ -41,12 +41,14 @@ def load_label_studio_export(path: str) -> tuple[list[dict], list[int]]:
             text = item["data"]["text"]
             message_id = item["data"].get("message_id")
             label = annotations[0]["result"][0]["value"]["choices"][0]
-            records.append({
-                "task_id": task_id,
-                "message_id": message_id,
-                "text": text,
-                "label": label,
-            })
+            records.append(
+                {
+                    "task_id": task_id,
+                    "message_id": message_id,
+                    "text": text,
+                    "label": label,
+                }
+            )
         except (KeyError, IndexError) as e:
             print(f"[SKIP] task_id={task_id} lỗi parse: {e}")
             skipped_ids.append(task_id)
@@ -83,9 +85,13 @@ def split_dataset(
     print(f"[LOAD] Tổng task trong file: {len(records) + len(skipped_ids)}")
     print(f"[LOAD] Hợp lệ (có label thật): {len(records)}")
     if skipped_ids:
-        print(f"[LOAD] ⚠️  BỊ SKIP (rỗng/lỗi): {len(skipped_ids)} — task_ids: {skipped_ids[:20]}{'...' if len(skipped_ids) > 20 else ''}")
-        print(f"[LOAD] → Kiểm tra lại các task này trong Label Studio trước khi train, "
-              f"nếu số lượng lớn thì KHÔNG nên bỏ qua.")
+        print(
+            f"[LOAD] ⚠️  BỊ SKIP (rỗng/lỗi): {len(skipped_ids)} — task_ids: {skipped_ids[:20]}{'...' if len(skipped_ids) > 20 else ''}"
+        )
+        print(
+            f"[LOAD] → Kiểm tra lại các task này trong Label Studio trước khi train, "
+            f"nếu số lượng lớn thì KHÔNG nên bỏ qua."
+        )
 
     if not records:
         raise ValueError("Không có record hợp lệ nào — dừng lại, kiểm tra export trước")
@@ -93,12 +99,18 @@ def split_dataset(
     labels = [r["label"] for r in records]
 
     train, temp = train_test_split(
-        records, train_size=train_ratio, stratify=labels, random_state=seed,
+        records,
+        train_size=train_ratio,
+        stratify=labels,
+        random_state=seed,
     )
     temp_labels = [r["label"] for r in temp]
     val_size_relative = val_ratio / (val_ratio + test_ratio)
     val, test = train_test_split(
-        temp, train_size=val_size_relative, stratify=temp_labels, random_state=seed,
+        temp,
+        train_size=val_size_relative,
+        stratify=temp_labels,
+        random_state=seed,
     )
 
     check_balance(records, "TOÀN BỘ (hợp lệ)")
@@ -119,7 +131,9 @@ def split_dataset(
         skipped_path = out / "skipped_task_ids.json"
         with open(skipped_path, "w") as f:
             json.dump(skipped_ids, f, indent=2)
-        print(f"[SAVED] {skipped_path} — danh sách task_id cần xem lại trong Label Studio")
+        print(
+            f"[SAVED] {skipped_path} — danh sách task_id cần xem lại trong Label Studio"
+        )
 
 
 if __name__ == "__main__":
