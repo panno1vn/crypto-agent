@@ -85,12 +85,14 @@ def split_dataset(
     print(f"[LOAD] Tổng task trong file: {len(records) + len(skipped_ids)}")
     print(f"[LOAD] Hợp lệ (có label thật): {len(records)}")
     if skipped_ids:
+        ids_preview = skipped_ids[:20]
+        more = "..." if len(skipped_ids) > 20 else ""
         print(
-            f"[LOAD] ⚠️  BỊ SKIP (rỗng/lỗi): {len(skipped_ids)} — task_ids: {skipped_ids[:20]}{'...' if len(skipped_ids) > 20 else ''}"
+            f"[LOAD] BI SKIP (rong/loi): {len(skipped_ids)} - task_ids: {ids_preview}{more}"
         )
         print(
-            f"[LOAD] → Kiểm tra lại các task này trong Label Studio trước khi train, "
-            f"nếu số lượng lớn thì KHÔNG nên bỏ qua."
+            "[LOAD] -> Kiem tra lai cac task nay trong Label Studio truoc khi train, "
+            "neu so luong lon thi KHONG nen bo qua."
         )
 
     if not records:
