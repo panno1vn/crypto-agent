@@ -5,3 +5,6 @@ __pycache__/
 *.session
 *.session-journal
 logs/
+mlflow_data/
+checkpoints/telegram/*.json
+*.png

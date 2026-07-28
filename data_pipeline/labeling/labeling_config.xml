@@ -1,0 +1,21 @@
+<View>
+  <Header value="Phân loại sentiment tin tức crypto (ảnh hưởng đến GIÁ coin, không phải cảm xúc chung)"/>
+
+  <Text name="text" value="$text"/>
+
+  <View style="display: flex; margin-top: 1em">
+    <View style="flex: 1; margin-right: 1em; padding: 1em; background: #f5f5f5; border-radius: 6px">
+      <Text name="channel_info" value="Channel: $channel_name | Time: $created_at | Views: $views | Forwards: $forwards"/>
+    </View>
+  </View>
+
+  <Choices name="sentiment" toName="text" choice="single" showInLine="true">
+    <Choice value="positive" hotkey="1"/>
+    <Choice value="negative" hotkey="2"/>
+    <Choice value="neutral" hotkey="3"/>
+  </Choices>
+
+  <View style="margin-top: 1em; padding: 0.8em; background: #fffbe6; border-radius: 6px; font-size: 13px">
+    <Text name="rubric" value="positive = tin tốt cho GIÁ (pump, partnership, adoption, ETF approval) | negative = tin xấu cho GIÁ (hack, ban, dump, FUD, regulatory crackdown) | neutral = không ảnh hưởng rõ ràng đến giá. Không chắc → chọn neutral."/>
+  </View>
+</View>
