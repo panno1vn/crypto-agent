@@ -1,7 +1,7 @@
 import asyncio
 import os
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List
 
 from binance import AsyncClient
 from dotenv import load_dotenv

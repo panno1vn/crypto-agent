@@ -8,3 +8,11 @@ logs/
 mlflow_data/
 checkpoints/telegram/*.json
 *.png
+
+# Model weights - quá lớn, KHÔNG commit (PhoBERT best_model ~400-500MB)
+models/*/best_model/
+
+# Ngoại lệ cho rule "*.png" ở trên — giữ lại ảnh/metrics trong models/
+!/models/phobert-crypto/*.png
+!/models/phobert-crypto/*.json
+!/models/phobert-crypto/*.txt

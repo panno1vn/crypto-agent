@@ -2,9 +2,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from data_pipeline.telegram.historical_scraper import (TelegramMessage,
-                                                       detect_language,
-                                                       extract_coins)
+from data_pipeline.telegram.historical_scraper import (
+    TelegramMessage,
+    detect_language,
+    extract_coins,
+)
 
 # ---------------------------------------------------------------------------
 # Group 1: extract_coins — 3 tests

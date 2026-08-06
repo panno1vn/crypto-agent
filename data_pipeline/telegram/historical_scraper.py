@@ -14,7 +14,6 @@ Bao gồm:
 
 import asyncio
 import json
-import logging
 import random
 from datetime import datetime, timezone
 from pathlib import Path
@@ -320,9 +319,11 @@ class DatabaseWriter:
                 msg.views,
                 msg.forwards,
                 msg.coins_mentioned,
-                msg.created_at.replace(tzinfo=timezone.utc)
-                if msg.created_at.tzinfo is None
-                else msg.created_at,
+                (
+                    msg.created_at.replace(tzinfo=timezone.utc)
+                    if msg.created_at.tzinfo is None
+                    else msg.created_at
+                ),
             )
             for msg in self._buffer
         ]

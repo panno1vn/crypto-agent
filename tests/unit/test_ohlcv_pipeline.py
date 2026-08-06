@@ -13,8 +13,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from data_pipeline.binance.ohlcv_pipeline import (OHLCV, parse_kline,
-                                                  validate_gaps)
+from data_pipeline.binance.ohlcv_pipeline import OHLCV, parse_kline, validate_gaps
 
 
 # ---------------------------------------------------------------------------

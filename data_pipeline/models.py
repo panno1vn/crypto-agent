@@ -2,8 +2,16 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import (ARRAY, BigInteger, Boolean, DateTime, ForeignKey,
-                        String, Text, UniqueConstraint)
+from sqlalchemy import (
+    ARRAY,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import DECIMAL

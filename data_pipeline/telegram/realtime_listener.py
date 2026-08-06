@@ -16,10 +16,12 @@ from dotenv import load_dotenv
 from telethon import TelegramClient, events
 
 from data_pipeline.logger import get_logger
-from data_pipeline.telegram.historical_scraper import (DatabaseWriter,
-                                                       TelegramMessage,
-                                                       detect_language,
-                                                       extract_coins)
+from data_pipeline.telegram.historical_scraper import (
+    DatabaseWriter,
+    TelegramMessage,
+    detect_language,
+    extract_coins,
+)
 
 # ---------------------------------------------------------------------------
 # Logger — dùng get_logger thay vì basicConfig
