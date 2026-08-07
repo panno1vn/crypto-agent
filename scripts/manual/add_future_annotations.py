@@ -100,7 +100,9 @@ def main():
             any_error = True
 
     if any_error:
-        print("\nCó lỗi xảy ra — kiểm tra lại các file [LỖI] ở trên trước khi tiếp tục.")
+        print(
+            "\nCó lỗi xảy ra — kiểm tra lại các file [LỖI] ở trên trước khi tiếp tục."
+        )
         sys.exit(1)
 
     print("\nHoàn tất. Chạy lại pytest + verify Airflow trước khi commit.")
