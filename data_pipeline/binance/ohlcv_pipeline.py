@@ -207,13 +207,11 @@ async def bulk_insert_ohlcv(data: List[OHLCV]) -> None:
     if not data:
         return
 
-    insert_query = text(
-        """
+    insert_query = text("""
         INSERT INTO ohlcv (coin, timeframe, open_time, open, high, low, close, volume)
         VALUES (:coin, :timeframe, :open_time, :open, :high, :low, :close, :volume)
         ON CONFLICT (coin, timeframe, open_time) DO NOTHING
-    """
-    )
+    """)
 
     # Chunk theo INSERT_CHUNK_SIZE để tránh transaction quá lớn
     for chunk_start in range(0, len(data), INSERT_CHUNK_SIZE):

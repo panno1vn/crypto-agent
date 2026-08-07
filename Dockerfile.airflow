@@ -13,8 +13,7 @@
 # của chính project (dùng chung 1 file requirements.txt cho cả app lẫn Airflow
 # để tránh version mismatch).
 
-FROM apache/airflow:2.8.0
-
+FROM apache/airflow:2.8.0-python3.11
 COPY requirements-airflow.txt /requirements-airflow.txt
 
 RUN pip install --no-cache-dir --user -r /requirements-airflow.txt

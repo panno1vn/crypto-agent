@@ -132,9 +132,7 @@ def weighted_vote(
     direction = (
         "long"
         if normalized_score > 0.2
-        else "short"
-        if normalized_score < -0.2
-        else "neutral"
+        else "short" if normalized_score < -0.2 else "neutral"
     )
     strength = min(abs(normalized_score), 1.0)
 
