@@ -45,15 +45,11 @@ def upgrade() -> None:
     )
     op.add_column(
         "telegram_messages",
-        sa.Column(
-            "sentiment_score", sa.DECIMAL(precision=4, scale=3), nullable=True
-        ),
+        sa.Column("sentiment_score", sa.DECIMAL(precision=4, scale=3), nullable=True),
     )
     op.add_column(
         "telegram_messages",
-        sa.Column(
-            "sentiment_model_version", sa.String(length=50), nullable=True
-        ),
+        sa.Column("sentiment_model_version", sa.String(length=50), nullable=True),
     )
     op.add_column(
         "telegram_messages",
