@@ -26,6 +26,7 @@ from typing import Optional
 
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -33,6 +34,10 @@ from data_pipeline.models import Base, TelegramChannel, TelegramMessage
 from nlp.engagement_weighting import aggregate_coin_sentiment
 from nlp.schemas import SentimentResult
 from nlp.sentiment_pipeline import process_unprocessed_messages
+
+# pytest KHÔNG tự đọc .env như script chạy tay (python -m ...) — phải
+# gọi tường minh, nếu không os.environ['POSTGRES_USER'] sẽ KeyError.
+load_dotenv()
 
 
 def _test_db_dsn() -> str:
