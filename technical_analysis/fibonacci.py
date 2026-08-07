@@ -5,6 +5,8 @@ Ngày 10 — Fibonacci Retracement & Extension
 =============================================
 """
 
+from __future__ import annotations
+
 import math
 from typing import Literal
 

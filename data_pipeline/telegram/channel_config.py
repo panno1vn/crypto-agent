@@ -11,6 +11,8 @@ làm tên file — nếu không chuẩn hóa, đổi qua lại có/không '@' s�
 2 file checkpoint khác nhau cho cùng 1 channel và làm mất tiến độ resume.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional
 

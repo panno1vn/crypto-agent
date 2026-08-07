@@ -28,6 +28,8 @@ VÀI CHỤC PHÚT tùy tốc độ máy. Luôn test với khoảng thời gian N
 (vd 2 tuần) trước khi chạy full 6 tháng.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 import pandas as pd

@@ -10,6 +10,8 @@ FIX (sau khi nối data thật vào confluence.py):
 Không có thay đổi nào khác so với bản trước.
 """
 
+from __future__ import annotations
+
 import math
 from datetime import datetime
 from decimal import Decimal

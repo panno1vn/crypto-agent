@@ -16,6 +16,8 @@ Vẫn giữ:
     đã cân bằng hơn thế nào.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -46,22 +48,19 @@ def build_dsn() -> str:
 
 async def check_vi_message_count(conn: asyncpg.Connection) -> int:
     """Đếm tổng số tin vi hợp lệ trước khi export, để không xuất 'lụi'."""
-    count = await conn.fetchval(
-        """
+    count = await conn.fetchval("""
         SELECT COUNT(*)
         FROM telegram_messages
         WHERE language = 'vi'
           AND message_text IS NOT NULL
           AND LENGTH(message_text) > 20
-        """
-    )
+        """)
     return count
 
 
 async def channel_distribution(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     """Phân bố tin vi theo channel — dùng để phát hiện lệch nguồn."""
-    return await conn.fetch(
-        """
+    return await conn.fetch("""
         SELECT channel_name, COUNT(*) AS cnt
         FROM telegram_messages
         WHERE language = 'vi'
@@ -69,8 +68,7 @@ async def channel_distribution(conn: asyncpg.Connection) -> list[asyncpg.Record]
           AND LENGTH(message_text) > 20
         GROUP BY channel_name
         ORDER BY cnt DESC
-        """
-    )
+        """)
 
 
 async def fetch_balanced_pool(
