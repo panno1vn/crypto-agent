@@ -14,7 +14,7 @@ from pathlib import Path
 import mlflow
 
 MLFLOW_TRACKING_URI = "http://localhost:5000"
-EXPERIMENT_NAME = "Crypto_Agent_PhoBERT_Sentiment_v3"  # đổi tên — experiment cũ bị soft-delete, tên cũ vẫn bị giữ chỗ trong thùng rác MLflow
+EXPERIMENT_NAME = "Crypto_Agent_PhoBERT_Sentiment_v3"
 MODEL_DIR = Path("models/phobert-crypto")
 
 
