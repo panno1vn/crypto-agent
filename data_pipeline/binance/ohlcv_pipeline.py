@@ -52,7 +52,15 @@ INSERT_CHUNK_SIZE = 2000
 class OHLCV(BaseModel):
     coin: str
     timeframe: str
-    open_time: datetime  # luôn là timezone-aware UTC (FIX 1)
+    # FIX (Ngày 20): trước đây comment ghi "luôn timezone-aware UTC (FIX 1)".
+    # Sai — cột DB thật (models.py: Column(DateTime), KHÔNG có
+    # timezone=True) là TIMESTAMP WITHOUT TIME ZONE, tức PHẢI naive.
+    # Naive ở đây LUÔN mang nghĩa UTC (quy ước dùng xuyên suốt project,
+    # xem nlp/engagement_weighting.py _utc_naive_now()). Đây là nguyên
+    # nhân gốc của lỗi asyncpg "can't subtract offset-naive and
+    # offset-aware datetimes" khi backfill Ngày 20 — không phải 20 lỗi
+    # rời rạc, chỉ 1 nguyên nhân duy nhất lặp lại ở mọi coin/timeframe.
+    open_time: datetime  # naive, UTC theo quy ước — KHÔNG mang tzinfo
     open: float
     high: float
     low: float
@@ -91,11 +99,13 @@ def parse_kline(kline: list, coin: str, timeframe: str) -> OHLCV:
     """
     Chuyển raw kline list từ Binance thành OHLCV schema.
 
-    FIX 1 — TIMEZONE:
-        Binance trả về timestamp ms (UTC).
-        datetime.fromtimestamp(..., tz=timezone.utc) → aware UTC datetime.
-        KHÔNG gọi .replace(tzinfo=None) — làm vậy sẽ mất tzinfo,
-        PostgreSQL TIMESTAMPTZ sẽ hiểu sai timezone → dữ liệu lệch giờ.
+    TIMEZONE (sửa Ngày 20 — comment "FIX 1" cũ SAI, xem docstring OHLCV
+    ở trên):
+        Binance trả về timestamp ms (UTC). Convert sang aware-UTC để
+        parse đúng, rồi STRIP tzinfo trước khi trả về — cột DB thật là
+        TIMESTAMP WITHOUT TIME ZONE, asyncpg sẽ raise DataError nếu
+        nhận datetime có tzinfo cho cột này. Giá trị GIỜ không đổi,
+        chỉ bỏ tzinfo — không phải dịch giờ.
 
     Kline format (Binance):
         [0]  open_time (ms)
@@ -109,8 +119,10 @@ def parse_kline(kline: list, coin: str, timeframe: str) -> OHLCV:
     return OHLCV(
         coin=coin,
         timeframe=timeframe,
-        # FIX 1: giữ nguyên timezone UTC, không strip
-        open_time=datetime.fromtimestamp(kline[0] / 1000, tz=timezone.utc),
+        # Parse đúng UTC rồi strip tzinfo — khớp cột DB naive (xem note ở trên).
+        open_time=datetime.fromtimestamp(kline[0] / 1000, tz=timezone.utc).replace(
+            tzinfo=None
+        ),
         open=float(kline[1]),
         high=float(kline[2]),
         low=float(kline[3]),
@@ -207,11 +219,13 @@ async def bulk_insert_ohlcv(data: List[OHLCV]) -> None:
     if not data:
         return
 
-    insert_query = text("""
+    insert_query = text(
+        """
         INSERT INTO ohlcv (coin, timeframe, open_time, open, high, low, close, volume)
         VALUES (:coin, :timeframe, :open_time, :open, :high, :low, :close, :volume)
         ON CONFLICT (coin, timeframe, open_time) DO NOTHING
-    """)
+    """
+    )
 
     # Chunk theo INSERT_CHUNK_SIZE để tránh transaction quá lớn
     for chunk_start in range(0, len(data), INSERT_CHUNK_SIZE):

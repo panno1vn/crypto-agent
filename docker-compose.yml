@@ -38,6 +38,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-crypto_agent}
       POSTGRES_HOST: postgres
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
       SENTIMENT_ENGAGEMENT_SCALE: "40"
     ports:
       - "8081:8080"
@@ -48,6 +50,7 @@ services:
       - ./nlp:/opt/airflow/nlp
       - ./models:/opt/airflow/models:ro
       - ./logs/airflow:/opt/airflow/logs
+      - ./crypto_session_dag_catchup.session:/opt/airflow/crypto_session_dag_catchup.session
       - huggingface_cache:/home/airflow/.cache/huggingface
 
     depends_on:

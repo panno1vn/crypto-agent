@@ -1,3 +1,4 @@
+# dags/dag_binance_ohlcv_sync.py
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -5,10 +6,26 @@ from airflow.operators.python import PythonOperator
 
 
 def run_binance_sync():
+    """
+    Gọi backfill_all() thật — trước đây chỉ print(), chưa từng lấy dữ
+    liệu gì (bug phát hiện Ngày 20, xem docs/GHI_CHU_NGAY20.md).
+
+    days_back=2: DAG chạy mỗi giờ, chỉ cần quét lùi đủ bắt kịp nếu lỡ
+    1-2 lần chạy (mạng lỗi, container restart...). Không dùng 90 (số
+    dùng cho full backfill 1 lần) vì mỗi giờ chạy lại sẽ tốn API call +
+    thời gian không cần thiết — bulk_insert_ohlcv() có ON CONFLICT DO
+    NOTHING nên quét dư không sai dữ liệu, chỉ lãng phí.
+
+    Import bên trong hàm (không để đầu file) — tránh Airflow scheduler
+    phải load toàn bộ dependency nặng (sqlalchemy, binance client...)
+    mỗi lần parse lại DAG file, làm chậm cả UI Airflow không cần thiết.
+    """
+    import asyncio
+
+    from data_pipeline.binance.ohlcv_pipeline import backfill_all
+
     print("Bắt đầu lấy dữ liệu nến (OHLCV) từ Binance...")
-    # Ví dụ import hàm từ ngày 6:
-    # from data_pipeline.binance.ohlcv_pipeline import fetch_ohlcv_for_all_coins
-    # fetch_ohlcv_for_all_coins()
+    asyncio.run(backfill_all(days_back=2))
     print("Lấy dữ liệu hoàn tất!")
 
 

@@ -16,3 +16,4 @@ models/*/best_model/
 !/models/phobert-crypto/*.png
 !/models/phobert-crypto/*.json
 !/models/phobert-crypto/*.txt
+*.bak

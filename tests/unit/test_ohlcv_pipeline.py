@@ -36,22 +36,21 @@ def make_raw_kline(
 # ---------------------------------------------------------------------------
 
 
-def test_parse_kline_returns_utc_aware_datetime():
+def test_parse_kline_returns_naive_utc_datetime():
     """
-    open_time phải là timezone-aware UTC.
+    open_time phải là naive datetime (UTC theo quy ước project).
 
-    Đây là FIX quan trọng nhất: trước đây code gọi .replace(tzinfo=None)
-    khiến datetime mất timezone → PostgreSQL TIMESTAMPTZ hiểu sai.
+    Đây là FIX quan trọng nhất: trước đây code gọi .replace(tzinfo=utc)
+    khiến datetime mang tzinfo trong khi cột DB naive → asyncpg lỗi.
     """
     kline = make_raw_kline(open_time_ms=1_700_000_000_000)
     result = parse_kline(kline, "BTCUSDT", "1h")
 
-    # Phải có tzinfo — không được là None
-    assert result.open_time.tzinfo is not None, (
-        "open_time phải là timezone-aware. "
-        "Đừng gọi .replace(tzinfo=None) sau khi convert UTC!"
+    # Phải naive — KHÔNG được mang tzinfo (cột DB là TIMESTAMP WITHOUT TIME ZONE)
+    assert result.open_time.tzinfo is None, (
+        "open_time phải là naive datetime (UTC theo quy ước project). "
+        "Cột DB là TIMESTAMP WITHOUT TIME ZONE — không được gắn tzinfo!"
     )
-    assert result.open_time.tzinfo == timezone.utc
 
 
 def test_parse_kline_correct_values():

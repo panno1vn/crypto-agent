@@ -318,14 +318,20 @@ class DatabaseWriter:
                 msg.channel_name,
                 msg.message_text,
                 msg.language,
+                False,  # has_media — schema scraper hiện chưa capture message.media
                 msg.views,
                 msg.forwards,
+                0,  # reply_count — cùng lý do: chưa capture trong schema hiện tại
                 msg.coins_mentioned,
                 (
-                    msg.created_at.replace(tzinfo=timezone.utc)
-                    if msg.created_at.tzinfo is None
+                    msg.created_at.replace(tzinfo=None)
+                    if msg.created_at.tzinfo is not None
                     else msg.created_at
                 ),
+                datetime.now(timezone.utc).replace(
+                    tzinfo=None
+                ),  # ingested_at — naive UTC,
+                False,  # is_processed — chưa chạy sentiment, đúng giá trị khởi tạo
             )
             for msg in self._buffer
         ]
@@ -335,8 +341,9 @@ class DatabaseWriter:
                 """
                 INSERT INTO telegram_messages (
                     id, channel_name, message_text, language,
-                    views, forwards, coins_mentioned, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    has_media, views, forwards, reply_count,
+                    coins_mentioned, created_at, ingested_at, is_processed
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 ON CONFLICT (id) DO NOTHING
                 """,
                 records,
