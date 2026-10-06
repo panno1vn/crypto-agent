@@ -1,0 +1,482 @@
+{
+  "generated_at": "2026-08-11T07:02:03.072169+00:00",
+  "top_n": 20,
+  "strip_prefix": false,
+  "collection_count": 26235,
+  "baseline": {
+    "model": "VECTOR ONLY (baseline)",
+    "max_on_topic_top1_dist": 0.4394,
+    "min_off_topic_top1_dist": 0.4895,
+    "separation_margin": 0.0501,
+    "latency_ms_mean": 1483.4
+  },
+  "models": {
+    "msmarco-en": {
+      "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "min_on_topic_top1": 0.6216,
+      "max_off_topic_top1": 0.0062,
+      "separation_margin": 0.6155,
+      "mean_tau_vs_vector": 0.087,
+      "latency_ms_mean": 539.6,
+      "latency_ms_max": 767.8,
+      "per_query": [
+        {
+          "query": "Bitcoin tăng giá mạnh",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9991917014122009,
+          "top5_scores": [
+            0.9992,
+            0.9987,
+            0.9766,
+            0.9701,
+            0.9668
+          ],
+          "top1_vector_dist": 0.20556337,
+          "tau_vs_vector": 0.0,
+          "latency_ms": 767.8,
+          "top1_doc": "[Channel: chatdautucrypto] Giá Bitcoin đang tăng từng bước một, nhưng volume thì lại quá yếu. Nếu lần này mà chỉ chạm đư",
+          "moved_into_top5": [
+            134,
+            4320,
+            45604,
+            310949
+          ]
+        },
+        {
+          "query": "Ethereum giảm giá",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9858929514884949,
+          "top5_scores": [
+            0.9859,
+            0.9801,
+            0.9753,
+            0.9654,
+            0.9592
+          ],
+          "top1_vector_dist": 0.20571268,
+          "tau_vs_vector": 0.116,
+          "latency_ms": 665.8,
+          "top1_doc": "[Channel: crypto_musk1m] [Coins: ETH, UNI] SEC duyệt 8 quỹ Ethereum ETF spot, và giả định rằng ETH sẽ chạm mức x2 giá hi",
+          "moved_into_top5": [
+            388,
+            5669,
+            5829,
+            13774
+          ]
+        },
+        {
+          "query": "SEC quy định crypto",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9908089637756348,
+          "top5_scores": [
+            0.9908,
+            0.9511,
+            0.8553,
+            0.8229,
+            0.774
+          ],
+          "top1_vector_dist": 0.22298312,
+          "tau_vs_vector": -0.147,
+          "latency_ms": 634.5,
+          "top1_doc": "[Channel: crypto_musk1m] SEC đăng cảnh báo nhà đầu tư nói không với “FOMO” về “tài sản kỹ thuật số”\n\nKhả năng là sẽ duyệ",
+          "moved_into_top5": [
+            10,
+            2604,
+            3417,
+            13771,
+            311362
+          ]
+        },
+        {
+          "query": "SEC crypto regulation",
+          "kind": "topic",
+          "lang": "en",
+          "top1_score": 0.9995678067207336,
+          "top5_scores": [
+            0.9996,
+            0.9994,
+            0.9989,
+            0.9982,
+            0.9981
+          ],
+          "top1_vector_dist": 0.2126298,
+          "tau_vs_vector": 0.379,
+          "latency_ms": 434.4,
+          "top1_doc": "[Channel: coingape] 🚨BREAKING: The US SEC is set to release its Innovation Exemption framework for tokenized securities ",
+          "moved_into_top5": [
+            11612,
+            56074,
+            57577
+          ]
+        },
+        {
+          "query": "altcoin season đang tới",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9952074885368347,
+          "top5_scores": [
+            0.9952,
+            0.989,
+            0.9873,
+            0.9841,
+            0.9822
+          ],
+          "top1_vector_dist": 0.26542765,
+          "tau_vs_vector": 0.084,
+          "latency_ms": 594.4,
+          "top1_doc": "[Channel: chatdautucrypto] [Coins: LINK, LTC] Altcoin Season là gì và Altcoin có ý nghĩa ra sao? \n\nAltcoin Season là kho",
+          "moved_into_top5": [
+            2806,
+            3191,
+            45496
+          ]
+        },
+        {
+          "query": "BTC pump",
+          "kind": "topic",
+          "lang": "en",
+          "top1_score": 0.9844589233398438,
+          "top5_scores": [
+            0.9845,
+            0.3707,
+            0.3182,
+            0.2932,
+            0.268
+          ],
+          "top1_vector_dist": 0.36566123,
+          "tau_vs_vector": -0.032,
+          "latency_ms": 661.4,
+          "top1_doc": "[Channel: RIC_Capital_Channel] [Coins: BTC, LTC] #BTC update\n\nBTC đang nằm trong phạm vi phân phối từ 40 -  45k.\n\nVẫn có",
+          "moved_into_top5": [
+            2279,
+            2297,
+            4040
+          ]
+        },
+        {
+          "query": "Binance CEO từ chức",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9993452429771423,
+          "top5_scores": [
+            0.9993,
+            0.9665,
+            0.9492,
+            0.9124,
+            0.5561
+          ],
+          "top1_vector_dist": 0.4393708,
+          "tau_vs_vector": 0.158,
+          "latency_ms": 463.4,
+          "top1_doc": "[Channel: crypto_musk1m] 🔔⚡️⚡️CZ - CEO sàn Binance từ chức . \nNhiều cáo buộc liên quan đến việc rữa tiền và vấn đề liên ",
+          "moved_into_top5": [
+            7991,
+            8028,
+            334672
+          ]
+        },
+        {
+          "query": "Binance CEO resignation scandal",
+          "kind": "topic",
+          "lang": "en",
+          "top1_score": 0.6216404438018799,
+          "top5_scores": [
+            0.6216,
+            0.336,
+            0.1356,
+            0.1003,
+            0.0858
+          ],
+          "top1_vector_dist": 0.3920263,
+          "tau_vs_vector": 0.074,
+          "latency_ms": 648.0,
+          "top1_doc": "[Channel: binance_announcements] **Update on Binance and Pakistan Collaborate to Foster Digital Asset Growth and Regulat",
+          "moved_into_top5": [
+            7688,
+            8028,
+            12477
+          ]
+        },
+        {
+          "query": "công thức nấu phở bò",
+          "kind": "off",
+          "lang": "vi",
+          "top1_score": 0.006184561178088188,
+          "top5_scores": [
+            0.0062,
+            0.0024,
+            0.0002,
+            0.0001,
+            0.0001
+          ],
+          "top1_vector_dist": 0.5140759,
+          "tau_vs_vector": -0.021,
+          "latency_ms": 232.7,
+          "top1_doc": "[Channel: thichcheatair] KÈO DOGS ko rác, mà vấn đề là thằng nào cũng muốn húp, lấy tiền đó trả cho anh em AIR chứ. Nên ",
+          "moved_into_top5": [
+            1007,
+            1210,
+            1665,
+            1928,
+            2233
+          ]
+        },
+        {
+          "query": "weather forecast tomorrow",
+          "kind": "off",
+          "lang": "en",
+          "top1_score": 2.914357537520118e-05,
+          "top5_scores": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "top1_vector_dist": 0.4895028,
+          "tau_vs_vector": 0.263,
+          "latency_ms": 294.1,
+          "top1_doc": "[Channel: coin369channel] 🔹  19:35:  Trung tâm Dự báo Khí hậu Hoa Kỳ (CPC): Dự kiến xác suất sự kiện El Niño này phát tr",
+          "moved_into_top5": [
+            310443,
+            311821,
+            332920
+          ]
+        }
+      ]
+    },
+    "mmarco": {
+      "model": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+      "min_on_topic_top1": 0.9461,
+      "max_off_topic_top1": 0.5393,
+      "separation_margin": 0.4068,
+      "mean_tau_vs_vector": 0.256,
+      "latency_ms_mean": 952.9,
+      "latency_ms_max": 1342.4,
+      "per_query": [
+        {
+          "query": "Bitcoin tăng giá mạnh",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9933620691299438,
+          "top5_scores": [
+            0.9934,
+            0.9858,
+            0.9729,
+            0.9166,
+            0.9153
+          ],
+          "top1_vector_dist": 0.20556337,
+          "tau_vs_vector": 0.095,
+          "latency_ms": 1342.4,
+          "top1_doc": "[Channel: RIC_Capital_Channel] Mô hình tăng giá mạnh nhất của Bitcoin đã hình thành",
+          "moved_into_top5": [
+            134,
+            12295,
+            12715,
+            45604
+          ]
+        },
+        {
+          "query": "Ethereum giảm giá",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9908313155174255,
+          "top5_scores": [
+            0.9908,
+            0.9849,
+            0.978,
+            0.9599,
+            0.9378
+          ],
+          "top1_vector_dist": 0.20571268,
+          "tau_vs_vector": 0.295,
+          "latency_ms": 1282.4,
+          "top1_doc": "[Channel: coingape] [Coins: ETH] 🔍 **Can Ethereum Price Repeat Its 2025 Rally as Active Addresses, Holders Reach Record ",
+          "moved_into_top5": [
+            5629,
+            5829,
+            55855
+          ]
+        },
+        {
+          "query": "SEC quy định crypto",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.984193742275238,
+          "top5_scores": [
+            0.9842,
+            0.9839,
+            0.9773,
+            0.9276,
+            0.9118
+          ],
+          "top1_vector_dist": 0.22298312,
+          "tau_vs_vector": 0.421,
+          "latency_ms": 1320.4,
+          "top1_doc": "[Channel: coingape] 🚨BREAKING: The US SEC is set to release its Innovation Exemption framework for tokenized securities ",
+          "moved_into_top5": [
+            11612,
+            56074
+          ]
+        },
+        {
+          "query": "SEC crypto regulation",
+          "kind": "topic",
+          "lang": "en",
+          "top1_score": 0.9996932744979858,
+          "top5_scores": [
+            0.9997,
+            0.9995,
+            0.9993,
+            0.9978,
+            0.9963
+          ],
+          "top1_vector_dist": 0.2126298,
+          "tau_vs_vector": 0.453,
+          "latency_ms": 984.9,
+          "top1_doc": "[Channel: coingape] 🚨BREAKING: The US SEC is set to release its Innovation Exemption framework for tokenized securities ",
+          "moved_into_top5": [
+            11612,
+            56074,
+            57577
+          ]
+        },
+        {
+          "query": "altcoin season đang tới",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9926798343658447,
+          "top5_scores": [
+            0.9927,
+            0.9803,
+            0.9783,
+            0.9711,
+            0.9653
+          ],
+          "top1_vector_dist": 0.26542765,
+          "tau_vs_vector": 0.211,
+          "latency_ms": 770.5,
+          "top1_doc": "[Channel: RIC_Capital_Channel] [Coins: LTC] Có lẽ mùa thu hoạch altcoin đã tới\n\nDòng tiền giờ đang tập trung đẩy mấy con",
+          "moved_into_top5": [
+            2806,
+            3191,
+            45527
+          ]
+        },
+        {
+          "query": "BTC pump",
+          "kind": "topic",
+          "lang": "en",
+          "top1_score": 0.9460626840591431,
+          "top5_scores": [
+            0.9461,
+            0.4152,
+            0.3478,
+            0.2732,
+            0.2118
+          ],
+          "top1_vector_dist": 0.36566123,
+          "tau_vs_vector": 0.011,
+          "latency_ms": 1275.8,
+          "top1_doc": "[Channel: RIC_Capital_Channel] [Coins: BTC, LTC] #BTC update\n\nBTC đang nằm trong phạm vi phân phối từ 40 -  45k.\n\nVẫn có",
+          "moved_into_top5": [
+            2279,
+            2297,
+            13031
+          ]
+        },
+        {
+          "query": "Binance CEO từ chức",
+          "kind": "topic",
+          "lang": "vi",
+          "top1_score": 0.9998283386230469,
+          "top5_scores": [
+            0.9998,
+            0.9993,
+            0.9914,
+            0.9753,
+            0.6255
+          ],
+          "top1_vector_dist": 0.4393708,
+          "tau_vs_vector": 0.442,
+          "latency_ms": 544.2,
+          "top1_doc": "[Channel: crypto_musk1m] 🔔⚡️⚡️CZ - CEO sàn Binance từ chức . \nNhiều cáo buộc liên quan đến việc rữa tiền và vấn đề liên ",
+          "moved_into_top5": [
+            1882,
+            7991,
+            8028
+          ]
+        },
+        {
+          "query": "Binance CEO resignation scandal",
+          "kind": "topic",
+          "lang": "en",
+          "top1_score": 0.9842785000801086,
+          "top5_scores": [
+            0.9843,
+            0.9621,
+            0.6417,
+            0.3577,
+            0.1385
+          ],
+          "top1_vector_dist": 0.3920263,
+          "tau_vs_vector": 0.305,
+          "latency_ms": 1262.1,
+          "top1_doc": "[Channel: crypto_musk1m] 🔔⚡️⚡️CZ - CEO sàn Binance từ chức . \nNhiều cáo buộc liên quan đến việc rữa tiền và vấn đề liên ",
+          "moved_into_top5": [
+            8028,
+            12753
+          ]
+        },
+        {
+          "query": "công thức nấu phở bò",
+          "kind": "off",
+          "lang": "vi",
+          "top1_score": 0.03010658174753189,
+          "top5_scores": [
+            0.0301,
+            0.0108,
+            0.0081,
+            0.0054,
+            0.0034
+          ],
+          "top1_vector_dist": 0.5140759,
+          "tau_vs_vector": 0.189,
+          "latency_ms": 330.7,
+          "top1_doc": "[Channel: thichcheatair] KÈO DOGS ko rác, mà vấn đề là thằng nào cũng muốn húp, lấy tiền đó trả cho anh em AIR chứ. Nên ",
+          "moved_into_top5": [
+            1928,
+            2136,
+            2172,
+            41459
+          ]
+        },
+        {
+          "query": "weather forecast tomorrow",
+          "kind": "off",
+          "lang": "en",
+          "top1_score": 0.5392726063728333,
+          "top5_scores": [
+            0.5393,
+            0.3501,
+            0.3107,
+            0.3004,
+            0.2514
+          ],
+          "top1_vector_dist": 0.4895028,
+          "tau_vs_vector": 0.137,
+          "latency_ms": 415.7,
+          "top1_doc": "[Channel: coin369channel] 🔹  18:39:  Ngày 10 tháng 8 – Tuần này, một đợt nắng nóng dữ dội nữa sẽ quét qua châu Âu vốn đã",
+          "moved_into_top5": [
+            311821,
+            332920
+          ]
+        }
+      ]
+    }
+  }
+}

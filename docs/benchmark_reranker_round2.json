@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-08-11T07:11:27.747735+00:00",
+  "warm_latency_ms_per_query": 17.0,
+  "cognate_ablation": [
+    {
+      "cognate_query": "Bitcoin tăng giá mạnh",
+      "vi_only_query": "Đồng tiền số vốn hóa lớn nhất đang tăng giá mạnh",
+      "msmarco-en": {
+        "score_with_cognate": 0.9992,
+        "score_vi_only": 0.9955,
+        "drop_pct": 0.4
+      },
+      "mmarco": {
+        "score_with_cognate": 0.9934,
+        "score_vi_only": 0.4904,
+        "drop_pct": 50.6
+      }
+    },
+    {
+      "cognate_query": "Ethereum giảm giá",
+      "vi_only_query": "Đồng tiền số lớn thứ hai đang giảm giá",
+      "msmarco-en": {
+        "score_with_cognate": 0.9859,
+        "score_vi_only": 0.9938,
+        "drop_pct": -0.8
+      },
+      "mmarco": {
+        "score_with_cognate": 0.9908,
+        "score_vi_only": 0.7188,
+        "drop_pct": 27.5
+      }
+    },
+    {
+      "cognate_query": "SEC quy định crypto",
+      "vi_only_query": "Cơ quan quản lý Mỹ ra quy định về tiền điện tử",
+      "msmarco-en": {
+        "score_with_cognate": 0.9908,
+        "score_vi_only": 0.9929,
+        "drop_pct": -0.2
+      },
+      "mmarco": {
+        "score_with_cognate": 0.9842,
+        "score_vi_only": 0.5511,
+        "drop_pct": 44.0
+      }
+    },
+    {
+      "cognate_query": "Binance CEO từ chức",
+      "vi_only_query": "Sếp lớn của một sàn giao dịch tiền số từ chức",
+      "msmarco-en": {
+        "score_with_cognate": 0.9993,
+        "score_vi_only": 0.945,
+        "drop_pct": 5.4
+      },
+      "mmarco": {
+        "score_with_cognate": 0.9998,
+        "score_vi_only": 0.8577,
+        "drop_pct": 14.2
+      }
+    },
+    {
+      "cognate_query": "altcoin season đang tới",
+      "vi_only_query": "Mùa các đồng tiền số vốn hóa nhỏ đang tới",
+      "msmarco-en": {
+        "score_with_cognate": 0.9952,
+        "score_vi_only": 0.9968,
+        "drop_pct": -0.2
+      },
+      "mmarco": {
+        "score_with_cognate": 0.9927,
+        "score_vi_only": 0.3328,
+        "drop_pct": 66.5
+      }
+    }
+  ]
+}
