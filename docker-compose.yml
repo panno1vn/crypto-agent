@@ -41,6 +41,18 @@ services:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
       SENTIMENT_ENGAGEMENT_SCALE: "40"
+      # --- Ngày 23: RAG / ChromaDB ---
+      # CHROMA_HOST=chroma (tên service, KHÔNG phải localhost — default
+      # của rag/config.py là 'localhost', đúng cho host WSL2 nhưng SAI
+      # trong container, sẽ trỏ về chính container airflow).
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      CHROMA_COLLECTION: telegram_messages
+      # Phải khớp CHÍNH XÁC giá trị trong .env local (dùng cho CLI/host).
+      # Lệch 1 trong 2 biến này sẽ bị EnrichFingerprintMismatchError chặn
+      # ngay ở get_collection() — xem rag/vector_store.py.
+      ENRICH_INCLUDE_TIME: "false"
+      ENRICH_INCLUDE_ENGAGEMENT: "false"
     ports:
       - "8081:8080"
     volumes:
@@ -48,6 +60,7 @@ services:
       - ./data_pipeline:/opt/airflow/data_pipeline
       - ./technical_analysis:/opt/airflow/technical_analysis
       - ./nlp:/opt/airflow/nlp
+      - ./rag:/opt/airflow/rag
       - ./models:/opt/airflow/models:ro
       - ./logs/airflow:/opt/airflow/logs
       - ./crypto_session_dag_catchup.session:/opt/airflow/crypto_session_dag_catchup.session
@@ -56,6 +69,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      chroma:
+        condition: service_started
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.10.2
@@ -74,6 +89,19 @@ services:
       --artifacts-destination /mlflow/artifacts
       --serve-artifacts
 
+  chroma:
+    image: chromadb/chroma:1.5.9
+    container_name: crypto_chroma
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/data
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+
 volumes:
   postgres_data:
   huggingface_cache:
+  chroma_data:

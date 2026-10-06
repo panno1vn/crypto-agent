@@ -22,3 +22,5 @@ tokenizers==0.22.2
 torch==2.13.0+cpu
 transformers==5.14.1
 typing_extensions==4.15.0
+chromadb-client==1.5.9
+sentence-transformers==5.7.0
