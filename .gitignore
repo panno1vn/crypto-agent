@@ -17,3 +17,17 @@ models/*/best_model/
 !/models/phobert-crypto/*.json
 !/models/phobert-crypto/*.txt
 *.bak
+
+# Docs làm việc nội bộ: chỉ commit 1 file tổng kết mỗi tuần (docs/WEEKn.md) — Pan chốt 2026-10-06.
+# KHÔNG ignore docs/nhat-ky/: hook nhat_ky_guard đọc nhật ký qua `git ls-files --exclude-standard`,
+# ignore thư mục đó thì hook không thấy nhật ký nào và báo thiếu mãi mãi. Để nó untracked.
+docs/GHI_CHU_NGAY*.md
+docs/context/
+docs/REVIEW_TECHNICAL_ANALYSIS_NGAY8_9.md
+docs/SESSION_LOG_*.md
+docs/Set_up_ngay*.md
+docs/TECH_STACK_REFERENCE.md
+crypto_agent_roadmap_v2.md
+
+# Claude Code tự ghi khi chọn "don't ask again"; cấu hình riêng từng máy.
+.claude/settings.local.json

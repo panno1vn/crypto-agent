@@ -1,0 +1,90 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(secrets/**)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Read(**/*.session)",
+      "Read(**/*.session-journal)",
+      "Bash(*nhat_ky_guard.py ack*)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git -C * push *)",
+      "Bash(git -c * push *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean *)",
+      "Bash(git checkout -- *)",
+      "Bash(git checkout .)",
+      "Bash(git restore *)",
+      "Bash(git stash drop *)",
+      "Bash(git stash clear *)",
+      "Bash(git branch -D *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh repo *)",
+      "Bash(gh api *)",
+      "Bash(gh gist *)",
+      "Bash(rm *)",
+      "Bash(*/rm *)",
+      "Bash(sudo *)",
+      "Bash(docker compose down *)",
+      "Bash(docker-compose down *)",
+      "Bash(docker volume rm *)",
+      "Bash(docker volume prune *)",
+      "Bash(docker system prune *)",
+      "Bash(docker container prune *)",
+      "Bash(docker run *)",
+      "Bash(alembic upgrade *)",
+      "Bash(*alembic upgrade *)",
+      "Bash(alembic downgrade *)",
+      "Bash(*alembic downgrade *)",
+      "Bash(alembic stamp *)",
+      "Bash(*alembic stamp *)",
+      "Bash(pip install *)",
+      "Bash(*pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(*pip3 install *)",
+      "Bash(pip uninstall *)",
+      "Bash(*pip uninstall *)",
+      "Bash(pip3 uninstall *)",
+      "Bash(*pip3 uninstall *)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/.claude/**)",
+      "Edit(/.gitignore)",
+      "Edit(/.git/**)",
+      "Edit(/.pre-commit-config.yaml)",
+      "Edit(/docker-compose.yml)",
+      "Edit(/Dockerfile.airflow)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/nhat_ky_guard.py\" session-start",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/nhat_ky_guard.py\" stop",
+            "timeout": 30,
+            "statusMessage": "Kiểm tra nhật ký..."
+          }
+        ]
+      }
+    ]
+  }
+}
