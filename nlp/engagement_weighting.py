@@ -25,6 +25,13 @@ Fix đủ các lỗi đã audit từ pseudocode gốc trong roadmap:
      không cần deploy lại code — CHƯA được calibrate theo phân phối
      views/forwards thật (cần chạy percentile query trước khi tin số
      mặc định 100.0).
+  9. (Ngày 27) `aggregate_coin_sentiment()` nhận thêm `as_of` optional —
+     cho phép tính sentiment tại 1 mốc thời gian quá khứ thay vì luôn
+     neo vào "bây giờ". Dùng bởi scripts/manual/dump_sentiment_distribution.py
+     để dump phân phối 30 ngày (rag/news_confirmation.py, Ngày 27).
+     CHỈ thêm ở hàm CHÍNH (theo coin) — `aggregate_channel_sentiment`
+     (hàm phụ, monitoring/audit) KHÔNG có tham số này, không cần dùng
+     cho mục đích lịch sử.
 
 QUAN TRỌNG — độc lập với dag_sentiment_pipeline.py:
 Module này CHỈ đọc dữ liệu đã có sẵn (sentiment_score đã được
@@ -139,6 +146,7 @@ async def aggregate_coin_sentiment(
     coin: str,
     window_hours: int = 4,
     scale_factor: float = ENGAGEMENT_SCALE_FACTOR,
+    as_of: Optional[datetime] = None,
 ) -> CoinSentimentSummary:
     """
     Tổng hợp sentiment của 1 coin trong N giờ gần nhất, có engagement
@@ -149,8 +157,19 @@ async def aggregate_coin_sentiment(
       - created_at trong window_hours gần nhất
       - coin nằm trong coins_mentioned (relevance gate tự nhiên — xem
         điểm 7 ở docstring đầu file)
+
+    Args:
+        as_of: (Ngày 27) Mốc thời gian coi là "hiện tại" khi tính cutoff.
+            None (mặc định) = dùng _utc_naive_now(), giữ nguyên hành vi
+            gốc Ngày 19. Truyền giá trị cụ thể để tính sentiment tại 1
+            mốc quá khứ — dùng bởi
+            scripts/manual/dump_sentiment_distribution.py (Ngày 27) để
+            dump phân phối lịch sử. KHÔNG dùng ngoài mục đích
+            backtest/phân tích lịch sử; mọi lệnh gọi runtime bình thường
+            (FastAPI endpoint, Agent tool) nên để None.
     """
-    cutoff = _utc_naive_now() - timedelta(hours=window_hours)
+    now = as_of if as_of is not None else _utc_naive_now()
+    cutoff = now - timedelta(hours=window_hours)
 
     stmt = (
         select(
@@ -162,6 +181,15 @@ async def aggregate_coin_sentiment(
         .outerjoin(TelegramChannel, TelegramMessage.channel_id == TelegramChannel.id)
         .where(TelegramMessage.sentiment_score.is_not(None))
         .where(TelegramMessage.created_at > cutoff)
+        # CHẶN TRÊN — bắt buộc phải có khi `now` không phải "bây giờ thật".
+        # Thiếu dòng này: với as_of=None thì vô hại (không có tin ở tương
+        # lai), nhưng với as_of=1 mốc quá khứ, thiếu chặn trên khiến query
+        # trả về MỌI tin từ cutoff cho tới BÂY GIỜ THẬT — cửa sổ phình to
+        # dần theo mức as_of lùi xa, không còn là cửa sổ window_hours cố
+        # định nữa. Bug này đã xảy ra thật (Ngày 27, phát hiện qua
+        # message_count tăng đơn điệu khi dump 30 ngày) — giữ dòng này lại,
+        # đừng xóa dù có vẻ dư thừa ở trường hợp as_of=None.
+        .where(TelegramMessage.created_at <= now)
         .where(TelegramMessage.coins_mentioned.any(coin))
     )
 
@@ -186,7 +214,7 @@ async def aggregate_coin_sentiment(
     mean_score = float(np.mean(weighted_scores)) if weighted_scores else 0.0
 
     logger.info(
-        f"[AGGREGATE] coin={coin} window={window_hours}h "
+        f"[AGGREGATE] coin={coin} window={window_hours}h as_of={now.isoformat()} "
         f"messages={len(weighted_scores)} mean_weighted_score={mean_score:.4f}"
     )
 
@@ -195,12 +223,14 @@ async def aggregate_coin_sentiment(
         mean_weighted_score=mean_score,
         message_count=len(weighted_scores),
         window_hours=window_hours,
-        computed_at=_utc_naive_now(),
+        computed_at=now,
     )
 
 
 # ---------------------------------------------------------------------------
 # Aggregate PHỤ — theo channel (monitoring/audit, không phải input chính)
+# KHÔNG có tham số as_of — hàm này không dùng cho mục đích lịch sử/backtest,
+# giữ nguyên hành vi gốc Ngày 19 (luôn tính từ "bây giờ").
 # ---------------------------------------------------------------------------
 async def aggregate_channel_sentiment(
     session: AsyncSession,
