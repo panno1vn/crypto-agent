@@ -186,3 +186,58 @@ def test_validate_gaps_single_candle():
     candles = [make_ohlcv_at(base)]
     result = validate_gaps(candles, "1h")
     assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# 2026-10-08, nợ #14 — cửa sổ quét lùi theo watermark + fail loudly
+# ---------------------------------------------------------------------------
+from datetime import timedelta  # noqa: E402
+from unittest.mock import AsyncMock, patch  # noqa: E402
+
+from data_pipeline.binance import ohlcv_pipeline  # noqa: E402
+from data_pipeline.binance.ohlcv_pipeline import days_back_since  # noqa: E402
+
+NOW = datetime(2026, 10, 7, 18, 0)
+
+
+def test_days_back_since_lo_47_ngay_quet_du():
+    # Lỗ thật: nến cuối 2026-08-19 17:00, DAG chạy lại 2026-10-07 18:00.
+    days = days_back_since(datetime(2026, 8, 19, 17, 0), NOW)
+    assert days == 51  # 49 ngày 1 giờ = 49.04 → ceil = 50, + 1 ngày biên
+    assert NOW - timedelta(days=days) < datetime(2026, 8, 19, 17, 0)
+
+
+def test_days_back_since_binh_thuong_giu_toi_thieu():
+    assert days_back_since(NOW - timedelta(hours=1), NOW, min_days=2) == 2
+
+
+def test_days_back_since_chua_co_nen_thi_raise():
+    with pytest.raises(ValueError):
+        days_back_since(None, NOW)
+
+
+def test_days_back_since_nen_o_tuong_lai_thi_raise():
+    with pytest.raises(ValueError):
+        days_back_since(NOW + timedelta(hours=7), NOW)
+
+
+async def test_sync_pairs_raise_khi_co_cap_loi():
+    # Mock biên mạng (Binance client) và DB. Trước 2026-10-08 hàm này log
+    # lỗi rồi kết thúc bình thường → DAG báo success dù không lấy được gì.
+    fake_client = AsyncMock()
+
+    async def days(coin, tf):
+        return 2
+
+    with patch.object(
+        ohlcv_pipeline.AsyncClient, "create", new=AsyncMock(return_value=fake_client)
+    ), patch.object(
+        ohlcv_pipeline, "fetch_ohlcv", new=AsyncMock(side_effect=OSError("mạng"))
+    ), patch.object(
+        ohlcv_pipeline, "engine", new=AsyncMock()
+    ), patch.object(
+        ohlcv_pipeline.asyncio, "sleep", new=AsyncMock()
+    ):
+        with pytest.raises(RuntimeError, match="20 cặp lỗi"):
+            await ohlcv_pipeline._sync_pairs(days, "TEST")
+    fake_client.close_connection.assert_awaited_once()

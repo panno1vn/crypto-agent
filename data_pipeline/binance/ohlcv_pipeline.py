@@ -1,7 +1,8 @@
 import asyncio
+import math
 import os
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import Awaitable, Callable, List, Optional
 
 from binance import AsyncClient
 from dotenv import load_dotenv
@@ -242,54 +243,91 @@ async def bulk_insert_ohlcv(data: List[OHLCV]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# backfill_all  ← FIX 2: error isolation
+# Cửa sổ quét lùi theo watermark (2026-10-08, nợ #14)
 # ---------------------------------------------------------------------------
-async def backfill_all(days_back: int = 90) -> None:
+def days_back_since(
+    last_open_time: Optional[datetime], now: datetime, min_days: int = 2
+) -> int:
     """
-    Orchestrator: chạy backfill tuần tự cho tất cả COINS × TIMEFRAMES.
+    Số ngày cần quét lùi để lấp từ nến cuối cùng đã có tới `now`.
 
-    FIX 2 — ERROR ISOLATION:
-        Bản cũ có try/except bọc TOÀN BỘ vòng lặp → 1 lỗi làm chết tất cả.
+    Trước 2026-10-08, DAG luôn quét cố định 2 ngày: stack tắt từ 2026-08-19
+    tới 2026-10-07 → lỗ 47 ngày không bao giờ được lấp, không có cảnh báo.
+    Giờ cửa sổ = khoảng trống thật + 1 ngày biên, tối thiểu `min_days`.
 
-        Bản mới: try/except nằm BÊN TRONG vòng lặp từng cặp coin/timeframe.
-        Nếu BTCUSDT 4h lỗi → log + continue → BTCUSDT 1d vẫn chạy bình thường.
-
-        Đây là anti-pattern quan trọng cần tránh trong mọi batch pipeline.
+    Raises:
+        ValueError: chưa có nến nào (phải chạy backfill_all() đầy đủ trước),
+            hoặc nến cuối nằm ở tương lai (lệch timezone — quy ước naive=UTC).
     """
-    logger.info(
-        f"[BACKFILL] Bắt đầu backfill {len(COINS)} coins × "
-        f"{len(TIMEFRAMES)} timeframes × {days_back} ngày"
+    if last_open_time is None:
+        raise ValueError(
+            "chưa có nến nào cho cặp này — chạy backfill_all(days_back=90) trước"
+        )
+    if last_open_time > now:
+        raise ValueError(
+            f"nến cuối {last_open_time} ở sau now={now} — lệch timezone? "
+            f"(quy ước: naive = UTC)"
+        )
+    gap_days = (now - last_open_time).total_seconds() / 86400
+    return max(min_days, math.ceil(gap_days) + 1)
+
+
+async def get_last_open_time(coin: str, timeframe: str) -> Optional[datetime]:
+    query = text(
+        "SELECT max(open_time) FROM ohlcv WHERE coin = :coin AND timeframe = :tf"
     )
+    async with engine.connect() as conn:
+        result = await conn.execute(query, {"coin": coin, "tf": timeframe})
+        return result.scalar_one_or_none()
 
+
+# ---------------------------------------------------------------------------
+# Vòng lặp chung cho backfill_all và sync_recent  ← FIX 2: error isolation
+# ---------------------------------------------------------------------------
+async def _sync_pairs(
+    days_for_pair: Callable[[str, str], Awaitable[int]], label: str
+) -> None:
+    """
+    Chạy tuần tự mọi COINS × TIMEFRAMES.
+
+    FIX 2 — ERROR ISOLATION: try/except theo từng cặp coin/tf, 1 cặp lỗi
+    không làm chết các cặp còn lại.
+
+    (2026-10-08) FAIL LOUDLY: trước đây lỗi chỉ được log, hàm vẫn kết thúc
+    bình thường → DAG báo success kể cả khi mọi cặp lỗi. Giờ chạy hết các
+    cặp rồi raise RuntimeError nếu có cặp lỗi, để Airflow đánh FAILED và
+    retry.
+    """
     client = await AsyncClient.create(
         api_key=BINANCE_API_KEY, api_secret=BINANCE_SECRET
     )
 
     success_count = 0
-    error_count = 0
+    failed: list[str] = []
 
     try:
         for coin in COINS:
             for tf in TIMEFRAMES:
-                # FIX 2: try/except theo từng cặp coin/tf, không bọc cả vòng lặp
                 try:
-                    logger.info(f"[BACKFILL] Đang xử lý {coin} {tf}...")
+                    days_back = await days_for_pair(coin, tf)
+                    logger.info(
+                        f"[{label}] Đang xử lý {coin} {tf} ({days_back} ngày)..."
+                    )
 
                     data = await fetch_ohlcv(client, coin, tf, days_back=days_back)
 
                     if not data:
-                        logger.warning(f"[BACKFILL] {coin} {tf}: không có data")
+                        logger.warning(f"[{label}] {coin} {tf}: không có data")
                         continue
 
                     await bulk_insert_ohlcv(data)
 
-                    logger.info(f"[BACKFILL] ✓ {coin} {tf}: {len(data)} nến đã lưu")
+                    logger.info(f"[{label}] ✓ {coin} {tf}: {len(data)} nến đã lưu")
                     success_count += 1
 
                 except Exception as e:
-                    # Log lỗi nhưng KHÔNG raise — tiếp tục cặp tiếp theo
-                    logger.error(f"[BACKFILL] ✗ {coin} {tf}: {e}", exc_info=True)
-                    error_count += 1
+                    logger.error(f"[{label}] ✗ {coin} {tf}: {e}", exc_info=True)
+                    failed.append(f"{coin} {tf}")
 
                 # Tránh Binance rate limit giữa mỗi request
                 await asyncio.sleep(0.5)
@@ -298,10 +336,42 @@ async def backfill_all(days_back: int = 90) -> None:
         await client.close_connection()
         await engine.dispose()
         logger.info(
-            f"[BACKFILL] Hoàn thành. "
-            f"Thành công: {success_count} | Lỗi: {error_count} "
+            f"[{label}] Hoàn thành. "
+            f"Thành công: {success_count} | Lỗi: {len(failed)} "
             f"/ {len(COINS) * len(TIMEFRAMES)} cặp"
         )
+
+    if failed:
+        raise RuntimeError(f"[{label}] {len(failed)} cặp lỗi: {', '.join(failed)}")
+
+
+async def backfill_all(days_back: int = 90) -> None:
+    """Backfill đầy đủ: mọi cặp quét lùi cùng `days_back` ngày."""
+    logger.info(
+        f"[BACKFILL] Bắt đầu backfill {len(COINS)} coins × "
+        f"{len(TIMEFRAMES)} timeframes × {days_back} ngày"
+    )
+
+    async def fixed(coin: str, tf: str) -> int:
+        return days_back
+
+    await _sync_pairs(fixed, "BACKFILL")
+
+
+async def sync_recent(min_days_back: int = 2) -> None:
+    """
+    Đồng bộ định kỳ (DAG mỗi giờ): mỗi cặp quét lùi từ nến cuối đã có trong
+    DB (days_back_since), không phải cửa sổ cố định. Tự lấp lỗ khi stack
+    từng tắt lâu hơn min_days_back.
+    """
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    async def from_watermark(coin: str, tf: str) -> int:
+        return days_back_since(
+            await get_last_open_time(coin, tf), now, min_days=min_days_back
+        )
+
+    await _sync_pairs(from_watermark, "SYNC")
 
 
 # ---------------------------------------------------------------------------

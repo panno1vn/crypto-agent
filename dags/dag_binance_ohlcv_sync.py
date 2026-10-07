@@ -7,14 +7,14 @@ from airflow.operators.python import PythonOperator
 
 def run_binance_sync():
     """
-    Gọi backfill_all() thật — trước đây chỉ print(), chưa từng lấy dữ
+    Gọi pipeline OHLCV thật — trước đây chỉ print(), chưa từng lấy dữ
     liệu gì (bug phát hiện Ngày 20, xem docs/GHI_CHU_NGAY20.md).
 
-    days_back=2: DAG chạy mỗi giờ, chỉ cần quét lùi đủ bắt kịp nếu lỡ
-    1-2 lần chạy (mạng lỗi, container restart...). Không dùng 90 (số
-    dùng cho full backfill 1 lần) vì mỗi giờ chạy lại sẽ tốn API call +
-    thời gian không cần thiết — bulk_insert_ohlcv() có ON CONFLICT DO
-    NOTHING nên quét dư không sai dữ liệu, chỉ lãng phí.
+    (2026-10-08, nợ #14) Gọi sync_recent(): mỗi cặp coin/timeframe quét lùi
+    từ nến cuối đã có trong DB, tối thiểu 2 ngày. Bản cũ quét cố định
+    days_back=2 nên khi stack tắt 2026-08-19 → 2026-10-07, lỗ 47 ngày không
+    bao giờ được lấp. sync_recent() raise nếu có cặp lỗi → Airflow FAILED
+    + retry, thay vì báo success khi không lấy được gì.
 
     Import bên trong hàm (không để đầu file) — tránh Airflow scheduler
     phải load toàn bộ dependency nặng (sqlalchemy, binance client...)
@@ -22,10 +22,10 @@ def run_binance_sync():
     """
     import asyncio
 
-    from data_pipeline.binance.ohlcv_pipeline import backfill_all
+    from data_pipeline.binance.ohlcv_pipeline import sync_recent
 
     print("Bắt đầu lấy dữ liệu nến (OHLCV) từ Binance...")
-    asyncio.run(backfill_all(days_back=2))
+    asyncio.run(sync_recent(min_days_back=2))
     print("Lấy dữ liệu hoàn tất!")
 
 
