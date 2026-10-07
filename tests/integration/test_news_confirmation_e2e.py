@@ -194,14 +194,14 @@ async def test_correlate_news_tin_ngoai_cua_so_khong_duoc_tinh(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Stopgap symbol BTC/BTCUSDT (nợ #2, N31) — trên DB THẬT, không mock
+# Chuẩn hóa symbol BTC/BTCUSDT (nợ #2, đóng ở N31) — trên DB THẬT, không mock
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_correlate_news_symbol_binance_pair_that_tren_db_that(db_session):
     """
     coins_mentioned lưu 'BTC' (dạng ngắn), gọi bằng 'BTCUSDT' (dạng cặp
-    Binance) phải vẫn khớp nhờ _to_base_symbol() stopgap. Khi N31 xóa
-    stopgap, test này phải ĐỎ nếu quên thay bằng chuẩn hóa chính thức.
+    Binance) phải vẫn khớp nhờ data_pipeline.symbols.to_base_symbol()
+    (N31). Ai đổi quy ước symbol mà quên chuẩn hóa thì test này ĐỎ.
     """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     channel_id = await _seed_channel(db_session, "test_channel_28c")

@@ -35,18 +35,10 @@ QUYẾT ĐỊNH KIẾN TRÚC khác với pseudocode roadmap v1/v2 — lý do:
      rơi vào 'neutral' bất kể sentiment nói gì. Đây là bug thiết kế,
      không phải rút gọn có chủ đích, nên đã sửa ở bản này.
 
-  4. ⚠️ STOPGAP cho nợ kỹ thuật CHƯA FIX (ledger: "BTC vs BTCUSDT symbol
-     mismatch trong aggregate_coin_sentiment()", hạn Ngày 31). Nếu
-     `ConfluentSignal.coin` ở dạng cặp Binance ("BTCUSDT") mà truyền
-     thẳng vào aggregate_coin_sentiment (lọc theo coins_mentioned dạng
-     "BTC"), MỌI lệnh gọi sẽ ra message_count=0 → no_data vĩnh viễn,
-     âm thầm sai — đúng kiểu bug ledger đã cảnh báo, chỉ lộ ra sớm hơn
-     dự kiến. `_to_base_symbol()` bên dưới cắt hậu tố quote phổ biến để
-     module này không sập ngay khi tích hợp. ĐÂY KHÔNG PHẢI FIX CHÍNH
-     THỨC — khi Ngày 31 xử lý nợ này tận gốc (chuẩn hóa symbol xuyên
-     suốt pipeline), hàm `_to_base_symbol()` phải bị XÓA và thay bằng
-     lời gọi tới giải pháp chuẩn hóa chính thức. Không giữ 2 bản song
-     song — sẽ lệch nhau âm thầm.
+  4. (Ngày 31) Chuẩn hóa symbol dùng data_pipeline.symbols.to_base_symbol(),
+     quy ước chính thức của repo. Trước N31 file này có stopgap riêng
+     `_to_base_symbol()` (nợ #2); stopgap đã bị xóa, không giữ 2 bản song
+     song. `ConfluentSignal.coin` ở dạng cặp ("BTCUSDT") vẫn khớp đúng.
 
   5. Ngưỡng threshold/confidence_adjustment đọc từ rag/config.py, CHƯA
      calibrate (xem cảnh báo trong config.py và
@@ -75,6 +67,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data_pipeline.logger import get_logger
+from data_pipeline.symbols import to_base_symbol
 from nlp.engagement_weighting import aggregate_coin_sentiment
 from rag.config import (
     NEWS_CONFIRMATION_CONFIRM_BOOST,
@@ -97,22 +90,6 @@ logger = get_logger(__name__)
 
 NewsStatus = Literal["confirmed", "conflicted", "neutral", "no_data"]
 
-# Hậu tố quote phổ biến trên Binance — dùng cho stopgap ở mục 4 docstring
-# đầu file. Thứ tự không quan trọng vì chỉ khớp 1 hậu tố/coin.
-_QUOTE_SUFFIXES = ("USDT", "BUSD", "USDC", "USD")
-
-
-def _to_base_symbol(coin: str) -> str:
-    """
-    STOPGAP — xem mục 4, docstring đầu file. Xóa khi nợ N31 được xử lý
-    tận gốc, thay bằng hàm chuẩn hóa symbol chính thức của pipeline.
-    """
-    coin_upper = coin.upper()
-    for suffix in _QUOTE_SUFFIXES:
-        if coin_upper.endswith(suffix) and len(coin_upper) > len(suffix):
-            return coin_upper[: -len(suffix)]
-    return coin_upper
-
 
 @dataclass
 class NewsConfirmation:
@@ -126,6 +103,55 @@ class NewsConfirmation:
     confidence_adjustment: float
     key_news: list[dict[str, Any]] = field(default_factory=list)
     window_hours: float = NEWS_CONFIRMATION_WINDOW_HOURS
+
+
+def classify_news_status(
+    score: float,
+    message_count: int,
+    direction: str,
+    upper_threshold: float = NEWS_CONFIRMATION_UPPER_THRESHOLD,
+    lower_threshold: float = NEWS_CONFIRMATION_LOWER_THRESHOLD,
+    min_message_count: int = NEWS_CONFIRMATION_MIN_MESSAGE_COUNT,
+) -> NewsStatus:
+    """
+    Phần THUẦN của news confirmation: từ (điểm sentiment, số tin, hướng kỹ
+    thuật) ra status. Không chạm DB/Chroma.
+
+    Tách ra ở Ngày 31 để backtest ablation N32 dùng lại đúng logic này với
+    sentiment lịch sử (aggregate_coin_sentiment(as_of=...)).
+    correlate_news_with_technical() luôn neo "bây giờ" nên không dùng được
+    cho backtest. Không viết lại logic ở nơi khác: 2 bản sẽ lệch nhau.
+
+    Raises:
+        ValueError: direction không phải 'long'/'short'/'neutral', hoặc
+            message_count âm.
+    """
+    if direction not in ("neutral", "long", "short"):
+        raise ValueError(f"technical_signal.direction không hợp lệ: {direction!r}")
+    if message_count < 0:
+        raise ValueError(f"message_count âm: {message_count}")
+
+    if message_count == 0 or message_count < min_message_count:
+        # message_count < min_message_count: có tin nhưng CHƯA đủ để tin —
+        # xem mục 6, docstring đầu file.
+        return "no_data"
+    if direction == "neutral":
+        # Không có hướng kỹ thuật nào để confirm/conflict — sentiment
+        # dù mạnh cỡ nào cũng không có gì để đối chiếu.
+        return "neutral"
+    if direction == "long":
+        if score > upper_threshold:
+            return "confirmed"
+        if score < lower_threshold:
+            return "conflicted"
+        return "neutral"
+    # direction == "short": đối xứng với nhánh long — sentiment càng ÂM
+    # càng xác nhận short, càng DƯƠNG càng mâu thuẫn với short.
+    if score < lower_threshold:
+        return "confirmed"
+    if score > upper_threshold:
+        return "conflicted"
+    return "neutral"
 
 
 async def correlate_news_with_technical(
@@ -147,7 +173,7 @@ async def correlate_news_with_technical(
         session: AsyncSession SQLAlchemy đang mở — hàm này KHÔNG tự tạo
             session/engine, giống contract của aggregate_coin_sentiment().
         coin: Mã coin — chấp nhận cả dạng cặp Binance ("BTCUSDT") lẫn
-            dạng ngắn ("BTC"), sẽ tự chuẩn hóa (xem stopgap mục 4).
+            dạng ngắn ("BTC"), sẽ tự chuẩn hóa (mục 4 docstring đầu file).
         technical_signal: Output của analyze_confluence() (Ngày 11).
             Chỉ dùng 2 field: .coin (để đối chiếu chéo) và .direction.
         window_hours: Cửa sổ thời gian tính sentiment VÀ tìm key_news.
@@ -172,8 +198,8 @@ async def correlate_news_with_technical(
             (sau chuẩn hóa), hoặc `technical_signal.direction` không phải
             'long'/'short'/'neutral'.
     """
-    coin_base = _to_base_symbol(coin)
-    signal_coin_base = _to_base_symbol(technical_signal.coin)
+    coin_base = to_base_symbol(coin)
+    signal_coin_base = to_base_symbol(technical_signal.coin)
 
     if coin_base != signal_coin_base:
         raise ValueError(
@@ -205,42 +231,20 @@ async def correlate_news_with_technical(
 
     score = sentiment_summary.mean_weighted_score
     direction = technical_signal.direction
-
-    if direction not in ("neutral", "long", "short"):
-        raise ValueError(f"technical_signal.direction không hợp lệ: {direction!r}")
-
-    status: NewsStatus
-    if sentiment_summary.message_count < min_message_count:
-        # Có tin (message_count > 0, đã loại ca ==0 ở trên) nhưng CHƯA
-        # đủ để tin — xem mục 6, docstring đầu file. sentiment_score
-        # vẫn giữ giá trị thật (không ép None) để không mất khả năng
-        # debug/quan sát, chỉ status báo "đừng hành động theo số này".
-        status = "no_data"
+    status = classify_news_status(
+        score=score,
+        message_count=sentiment_summary.message_count,
+        direction=direction,
+        upper_threshold=upper_threshold,
+        lower_threshold=lower_threshold,
+        min_message_count=min_message_count,
+    )
+    if status == "no_data":
         logger.info(
             f"[NEWS_CONFIRM] coin={coin_base} message_count="
             f"{sentiment_summary.message_count} < min_message_count="
             f"{min_message_count} → no_data (score thật vẫn giữ để debug)"
         )
-    elif direction == "neutral":
-        # Không có hướng kỹ thuật nào để confirm/conflict — sentiment
-        # dù mạnh cỡ nào cũng không có gì để đối chiếu.
-        status = "neutral"
-    elif direction == "long":
-        if score > upper_threshold:
-            status = "confirmed"
-        elif score < lower_threshold:
-            status = "conflicted"
-        else:
-            status = "neutral"
-    else:  # direction == "short"
-        # Đối xứng với nhánh long: sentiment càng ÂM càng xác nhận
-        # short, sentiment càng DƯƠNG càng mâu thuẫn với short.
-        if score < lower_threshold:
-            status = "confirmed"
-        elif score > upper_threshold:
-            status = "conflicted"
-        else:
-            status = "neutral"
 
     confidence_adjustment = {
         "confirmed": confirm_boost,

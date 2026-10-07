@@ -13,12 +13,9 @@ và rolling correlation — phải tự query + resample, không tái dùng
 trực tiếp được, dù logic weighting bên trong (engagement_weighted_score)
 tái dùng nguyên vẹn.
 
-⚠️ Bug đã phát hiện khi viết file này: coins_mentioned lưu SHORT symbol
-(vd 'BTC' — xem ngày_4/extract_coins()), trong khi OHLCV.coin và mọi
-nơi khác dùng FULL symbol ('BTCUSDT'). aggregate_coin_sentiment() hiện
-tại sẽ luôn trả 0 message nếu gọi bằng full symbol — cần fix riêng,
-không thuộc phạm vi file này. _to_short_symbol() dưới đây xử lý cho
-module này, KHÔNG sửa hàm gốc.
+Symbol: coins_mentioned lưu dạng NGẮN ('BTC'), OHLCV.coin lưu dạng CẶP
+('BTCUSDT'). Nối 2 miền bằng data_pipeline.symbols.to_base_symbol() (Ngày 31,
+nợ #2). Stopgap `_to_short_symbol()` viết ở Ngày 20 đã bị xóa.
 
 ⚠️ price_return dùng pct_change() đơn giản — CHƯA verify khớp với
 convention của backtest.py (không có file đó lúc viết). Nếu backtest.py
@@ -39,25 +36,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data_pipeline.logger import get_logger
 from data_pipeline.models import TelegramChannel, TelegramMessage
+from data_pipeline.symbols import to_base_symbol
 from nlp.engagement_weighting import engagement_weighted_score
 from technical_analysis.indicator_pipeline import fetch_ohlcv_from_db
 
 logger = get_logger(__name__)
-
-_COIN_SUFFIXES = ("USDT", "BUSD", "USD")
-
-
-def _to_short_symbol(coin: str) -> str:
-    """
-    'BTCUSDT' -> 'BTC'. Idempotent nếu đã là short form.
-
-    Xem cảnh báo ở docstring đầu file — coins_mentioned lưu short
-    symbol, OHLCV.coin lưu full symbol. Đây là chỗ nối 2 convention.
-    """
-    for suffix in _COIN_SUFFIXES:
-        if coin.endswith(suffix) and len(coin) > len(suffix):
-            return coin[: -len(suffix)]
-    return coin
 
 
 def _utc_naive_now() -> datetime:
@@ -98,7 +81,7 @@ async def _load_sentiment_timeseries(
     sẽ tạo correlation giả — 1 tin cũ "kéo dài" ảnh hưởng sang nhiều
     nến giá sau đó nó không thực sự liên quan).
     """
-    short_coin = _to_short_symbol(coin)
+    short_coin = to_base_symbol(coin)
     cutoff = _utc_naive_now() - timedelta(days=lookback_days)
 
     stmt = (

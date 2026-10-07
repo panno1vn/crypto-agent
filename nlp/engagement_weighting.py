@@ -55,6 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from data_pipeline.logger import get_logger
 from data_pipeline.models import TelegramChannel, TelegramMessage
+from data_pipeline.symbols import to_base_symbol
 
 logger = get_logger(__name__)
 
@@ -159,6 +160,9 @@ async def aggregate_coin_sentiment(
         điểm 7 ở docstring đầu file)
 
     Args:
+        coin: Nhận cả dạng cặp ("BTCUSDT") lẫn dạng ngắn ("BTC"); luôn được
+            chuẩn hóa về dạng ngắn qua data_pipeline.symbols.to_base_symbol()
+            (Ngày 31, nợ #2). CoinSentimentSummary.coin trả về dạng ngắn.
         as_of: (Ngày 27) Mốc thời gian coi là "hiện tại" khi tính cutoff.
             None (mặc định) = dùng _utc_naive_now(), giữ nguyên hành vi
             gốc Ngày 19. Truyền giá trị cụ thể để tính sentiment tại 1
@@ -168,6 +172,10 @@ async def aggregate_coin_sentiment(
             backtest/phân tích lịch sử; mọi lệnh gọi runtime bình thường
             (FastAPI endpoint, Agent tool) nên để None.
     """
+    # (Ngày 31, nợ #2) coins_mentioned lưu dạng NGẮN ("BTC"). Trước N31,
+    # gọi bằng dạng cặp Binance ("BTCUSDT") ra 0 tin mà không báo lỗi. Chuẩn
+    # hóa ngay tại biên này nên mọi nơi gọi đều đúng, kể cả nơi gọi tương lai.
+    coin = to_base_symbol(coin)
     now = as_of if as_of is not None else _utc_naive_now()
     cutoff = now - timedelta(hours=window_hours)
 
