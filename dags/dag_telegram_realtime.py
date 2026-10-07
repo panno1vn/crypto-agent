@@ -66,6 +66,7 @@ def run_telegram_sync():
             await conn.close()
 
         client = TelegramClient("crypto_session_dag_catchup", API_ID, API_HASH)
+        failed: list[str] = []
         db_writer = DatabaseWriter(dsn=DB_DSN, batch_size=100)
 
         async with client:
@@ -81,6 +82,9 @@ def run_telegram_sync():
                             # quét sâu như backfill 1 lần
                             offset_date=None,
                             min_message_id=max_ids.get(channel),
+                            # Cũ nhất trước — xem docstring scrape_channel_history
+                            # (nợ #14): newest-first + limit làm mất tin ở giữa.
+                            oldest_first=True,
                         ):
                             await db_writer.write(msg)
                             count += 1
@@ -91,8 +95,13 @@ def run_telegram_sync():
                         # 1 channel lỗi không chặn channel còn lại — cùng
                         # nguyên tắc FIX 2 đã áp dụng ở ohlcv_pipeline.py.
                         print(f"[TELEGRAM_SYNC] Lỗi ở {channel}: {e}")
+                        failed.append(channel)
             finally:
                 await db_writer.close()
+        # (2026-10-08) Fail loudly: trước đây lỗi chỉ được print, DAG vẫn
+        # success kể cả khi mọi kênh lỗi.
+        if failed:
+            raise RuntimeError(f"[TELEGRAM_SYNC] {len(failed)} kênh lỗi: {failed}")
 
     print("Bắt đầu đồng bộ dữ liệu Telegram (catch-up)...")
     asyncio.run(_sync())

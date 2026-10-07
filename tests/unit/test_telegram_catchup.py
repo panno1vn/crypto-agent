@@ -1,0 +1,96 @@
+"""
+tests/unit/test_telegram_catchup.py
+
+2026-10-08, nợ #14 — catch-up Telegram phải lấy tin CŨ NHẤT trước kể từ
+watermark. Telethon là biên mạng nên dùng client GIẢ, ghi lại tham số
+iter_messages và mô phỏng thứ tự trả về của Telethon.
+"""
+
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
+import pytest
+
+from data_pipeline.telegram import historical_scraper
+from data_pipeline.telegram.historical_scraper import scrape_channel_history
+
+TEXT = "BTC vượt kháng cự, thị trường đang rất sôi động hôm nay"
+
+
+class FakeClient:
+    """Mô phỏng iter_messages: newest-first mặc định, reverse=True thì tăng dần."""
+
+    def __init__(self, ids):
+        self.ids = sorted(ids)
+        self.calls = []
+
+    def iter_messages(self, channel, limit=None, **kw):
+        self.calls.append(kw)
+        ids = self.ids
+        if "min_id" in kw:
+            ids = [i for i in ids if i > kw["min_id"]]
+        ids = ids if kw.get("reverse") else list(reversed(ids))
+        ids = ids[:limit]
+
+        async def gen():
+            for i in ids:
+                yield SimpleNamespace(
+                    id=i,
+                    text=TEXT,
+                    views=1,
+                    forwards=0,
+                    date=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                )
+
+        return gen()
+
+
+@pytest.fixture(autouse=True)
+def khong_ngu_that(monkeypatch):
+    # Scraper ngủ 3.5-8.2s sau mỗi 35-65 tin (giả lập người thật). Unit test
+    # không cần chờ thật.
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(historical_scraper.asyncio, "sleep", no_sleep)
+
+
+async def _collect(client, **kw):
+    return [m.id async for m in scrape_channel_history(client, "kenh", **kw)]
+
+
+async def test_oldest_first_lay_ngay_sau_watermark_khong_bo_khuc_giua():
+    # Watermark 100, có 1000 tin mới (101..1100), limit 500.
+    client = FakeClient(range(1, 1101))
+    got = await _collect(client, limit=500, min_message_id=100, oldest_first=True)
+    assert got == list(range(101, 601))
+    assert client.calls[0] == {"min_id": 100, "reverse": True}
+
+
+async def test_newest_first_cu_mat_khuc_giua():
+    # Tái hiện bug: newest-first + limit chỉ lấy 601..1100; 101..600 bị bỏ
+    # vì lần sau watermark MAX(id)=1100.
+    client = FakeClient(range(1, 1101))
+    got = await _collect(client, limit=500, min_message_id=100)
+    assert min(got) == 601
+
+
+async def test_oldest_first_khong_co_watermark_thi_raise():
+    with pytest.raises(ValueError):
+        await _collect(FakeClient([1, 2]), limit=10, oldest_first=True)
+
+
+class ErrorClient:
+    def iter_messages(self, channel, limit=None, **kw):
+        async def gen():
+            raise RuntimeError("Nobody is using this username")
+            yield  # pragma: no cover
+
+        return gen()
+
+
+async def test_loi_kenh_duoc_raise_khong_bi_nuot():
+    # Bản cũ: except Exception → chỉ log, generator kết thúc bình thường →
+    # DAG catch-up báo success dù kênh không tồn tại.
+    with pytest.raises(RuntimeError):
+        await _collect(ErrorClient(), limit=10, min_message_id=1, oldest_first=True)

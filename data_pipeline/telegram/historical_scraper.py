@@ -170,19 +170,27 @@ async def scrape_channel_history(
     limit: int = 5000,
     offset_date: Optional[datetime] = None,
     min_message_id: Optional[int] = None,  # resume từ checkpoint
+    oldest_first: bool = False,
 ) -> AsyncGenerator[TelegramMessage, None]:
     """
     Async generator — yield từng TelegramMessage validated.
 
     Features:
       - Humanized proactive throttling (ngủ ngẫu nhiên mỗi 35–65 msg)
-      - FloodWaitError handling với kill-switch (>1h hoặc >3 lần liên tiếp)
+      - FloodWaitError và lỗi khác: log rồi RAISE (2026-10-08), nơi gọi bắt theo kênh
       - Language detection tích hợp
       - min_message_id: dừng khi gặp message cũ hơn checkpoint
+      - oldest_first (2026-10-08, nợ #14): lấy từ tin NGAY SAU
+        min_message_id đi lên (Telethon `min_id` + `reverse=True`). Bắt buộc
+        cho catch-up định kỳ có `limit`: mặc định Telethon trả tin MỚI NHẤT
+        trước, nên khi có hơn `limit` tin mới, chỉ `limit` tin mới nhất được
+        lưu, watermark MAX(id) nhảy lên đỉnh và phần ở giữa mất vĩnh viễn
+        (coin369channel mất 2026-08-19 → 10-06). Backfill sâu (lùi về quá
+        khứ theo offset_date) vẫn dùng mặc định newest-first.
     """
+    if oldest_first and min_message_id is None:
+        raise ValueError("oldest_first=True cần min_message_id (watermark)")
     message_count = 0
-    consecutive_flood_errors = 0
-    MAX_FLOOD_ERRORS = 3
 
     next_rest_target = random.randint(35, 65)
 
@@ -192,11 +200,17 @@ async def scrape_channel_history(
     )
 
     try:
-        async for message in client.iter_messages(
-            channel,
-            limit=limit,
-            offset_date=offset_date,
-        ):
+        if oldest_first:
+            iterator = client.iter_messages(
+                channel, limit=limit, min_id=min_message_id, reverse=True
+            )
+        else:
+            iterator = client.iter_messages(
+                channel,
+                limit=limit,
+                offset_date=offset_date,
+            )
+        async for message in iterator:
             # --- Resume: bỏ qua message đã scrape trước đó ---
             if min_message_id and message.id <= min_message_id:
                 logger.info(
@@ -204,8 +218,6 @@ async def scrape_channel_history(
                     f"Total new messages: {message_count}"
                 )
                 return
-
-            consecutive_flood_errors = 0  # reset nếu request thành công
 
             if not message.text:
                 continue
@@ -238,26 +250,18 @@ async def scrape_channel_history(
                 next_rest_target = message_count + random.randint(35, 65)
 
     except FloodWaitError as e:
-        consecutive_flood_errors += 1
-        logger.warning(
-            f"[FLOOD] Attempt {consecutive_flood_errors}/{MAX_FLOOD_ERRORS}. "
-            f"Wait={e.seconds}s"
-        )
-
-        # Kill-switch 1: wait > 1 giờ
-        if e.seconds > 3600:
-            logger.error("[FLOOD] Wait > 1h. Emergency stop.")
-            return
-
-        # Kill-switch 2: quá nhiều lần liên tiếp
-        if consecutive_flood_errors >= MAX_FLOOD_ERRORS:
-            logger.error("[FLOOD] Too many consecutive rate limits. Emergency stop.")
-            return
-
-        await asyncio.sleep(e.seconds)
+        # (2026-10-08) RAISE thay vì nuốt. Bản cũ ngủ e.seconds rồi THOÁT
+        # generator (không lấy tiếp) → kết quả bị cắt cụt mà nơi gọi tưởng
+        # là đã hết tin. Mọi nơi gọi đều có try/except theo kênh; lần chạy
+        # sau resume từ watermark.
+        logger.warning(f"[FLOOD] channel={channel} Wait={e.seconds}s — dừng kênh này")
+        raise
 
     except Exception as e:
+        # (2026-10-08) RAISE sau khi log. Bản cũ chỉ log → DAG catch-up báo
+        # success kể cả khi kênh không tồn tại (UsernameInvalidError).
         logger.error(f"[ERROR] channel={channel}: {e}", exc_info=True)
+        raise
 
     finally:
         logger.info(
