@@ -34,12 +34,14 @@ import pandas as pd
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent.ablation import (
+    SIDES_BOTH,
     build_component_series,
     default_branches,
     describe_distribution,
+    read_components_csv,
     run_branch,
     sentiment_coverage,
-    validate_components,
+    write_components_csv,
 )
 from agent.signal_aggregator import load_signal_weights
 from data_pipeline.logger import get_logger
@@ -77,9 +79,7 @@ async def _load_components(coin: str, args) -> pd.DataFrame:
     path = _cache_path(Path(args.cache_dir), coin, args)
     if path.exists() and not args.refresh:
         logger.info(f"[ABLATION] Dùng cache {path}")
-        df = pd.read_csv(path, index_col=0, parse_dates=True)
-        validate_components(df)
-        return df
+        return read_components_csv(path)
 
     engine = create_async_engine(
         get_db_dsn().replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -98,7 +98,7 @@ async def _load_components(coin: str, args) -> pd.DataFrame:
     finally:
         await engine.dispose()
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path)
+    write_components_csv(df, path)
     return df
 
 
@@ -120,6 +120,8 @@ def main() -> None:
     p.add_argument("--exit-quantile", type=float, default=0.25)
     p.add_argument("--sl-pct", type=float, default=0.02)
     p.add_argument("--tp-pct", type=float, default=0.04)
+    p.add_argument("--fees", type=float, default=0.001)
+    p.add_argument("--sides", choices=["both", "long"], default="both")
     p.add_argument("--cache-dir", default="data/ablation_cache")
     p.add_argument("--refresh", action="store_true", help="bỏ qua cache, gọi lại DB")
     args = p.parse_args()
@@ -131,6 +133,7 @@ def main() -> None:
 
     components = {c: asyncio.run(_load_components(c, args)) for c in args.coins}
     branches = default_branches(load_signal_weights())
+    sides = SIDES_BOTH if args.sides == "both" else ("long",)
 
     common_params = {
         "start": args.start.isoformat(),
@@ -143,6 +146,8 @@ def main() -> None:
         "exit_quantile": args.exit_quantile,
         "sl_pct": args.sl_pct,
         "tp_pct": args.tp_pct,
+        "fees": args.fees,
+        "sides": args.sides,
         "news_upper_threshold": NEWS_CONFIRMATION_UPPER_THRESHOLD,
         "news_lower_threshold": NEWS_CONFIRMATION_LOWER_THRESHOLD,
         "news_min_message_count": NEWS_CONFIRMATION_MIN_MESSAGE_COUNT,
@@ -165,7 +170,7 @@ def main() -> None:
             for coin, df in components.items():
                 cov = sentiment_coverage(df, NEWS_CONFIRMATION_MIN_MESSAGE_COUNT)
                 dist = describe_distribution(
-                    df["strength"].where(df["direction"] == "long", 0.0)
+                    df["strength"].where(df["direction"].isin(sides), 0.0)
                 )
                 res = run_branch(
                     df,
@@ -178,6 +183,8 @@ def main() -> None:
                     exit_quantile=args.exit_quantile,
                     sl_pct=args.sl_pct,
                     tp_pct=args.tp_pct,
+                    fees=args.fees,
+                    sides=sides,
                 )
                 numeric = {
                     f"{coin}_{k}": v
@@ -194,6 +201,8 @@ def main() -> None:
                         "branch": branch.name,
                         "coin": coin,
                         "trades": res["total_trades"],
+                        "long_sig": res["long_entry_signals"],
+                        "short_sig": res["short_entry_signals"],
                         "return_%": round(res["total_return"], 3),
                         "win_%": round(res["win_rate"], 2),
                         "sharpe": round(res["sharpe_ratio"], 3),

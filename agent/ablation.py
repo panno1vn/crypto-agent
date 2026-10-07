@@ -13,7 +13,7 @@ Thiết kế (chi tiết + phương án thay thế: docs/nhat-ky/, task N32):
   2. Không look-ahead:
      - analyze_confluence(as_of=t) và aggregate_coin_sentiment(as_of=t) chỉ
        thấy dữ liệu <= t.
-     - backtest_confluence_signal() shift(1) tín hiệu (N12).
+     - Tín hiệu shift(1) trước khi vào lệnh (như N12), xem _backtest_two_sided().
      - Ngưỡng vào/ra lệnh = quantile của confidence TRÊN ĐOẠN HIỆU CHỈNH
        (calib_frac đầu cửa sổ). Backtest CHỈ chạy trên đoạn còn lại. Nợ #5:
        ngưỡng cứng 0.65 nằm ở đuôi xa của phân phối thật (mean≈0.23).
@@ -22,8 +22,14 @@ Thiết kế (chi tiết + phương án thay thế: docs/nhat-ky/, task N32):
        khi sentiment trung tính. Cùng quantile = cùng "độ kén" lệnh, so
        sánh công bằng hơn cùng một con số tuyệt đối.
 
-  3. Chỉ nhánh LONG: backtest_confluence_signal() là chiến lược một chiều
-     (giới hạn có chủ đích của N12). Mốc TA short/neutral → confidence 0.
+  3. HAI CHIỀU (long + short). Lần chạy thử đầu tiên (BTC 2026-06-06 →
+     06-20) có 245 mốc short, 64 long: backtest long-only của N12 bỏ ~73% tín
+     hiệu và gần như không có lệnh. Vì vậy ablation có backtest 2 chiều riêng
+     (_backtest_two_sided), KHÔNG sửa backtest_confluence_signal() của N12
+     (baseline cũ giữ nguyên). Short ở đây giả định có thể bán khống (futures/
+     margin); executor spot ở tuần 7 không làm được short — đây là đánh giá
+     chất lượng TÍN HIỆU, không phải chiến lược có thể chạy ngay.
+     Ngưỡng tính CHUNG cho 2 chiều vì công thức confidence đối xứng.
 
   4. ⚠️ sentiment và news cùng nguồn (agent/signal_aggregator.py, mục 4).
      Nhánh 3 so với nhánh 2 đo tác dụng của bản phân ngưỡng của cùng biến.
@@ -154,6 +160,27 @@ async def build_component_series(
 
 
 # ---------------------------------------------------------------------------
+# Cache CSV
+# ---------------------------------------------------------------------------
+def write_components_csv(df: pd.DataFrame, path) -> None:
+    validate_components(df)
+    df.to_csv(path)
+
+
+def read_components_csv(path) -> pd.DataFrame:
+    """
+    Đọc cache với float_precision="round_trip". Bộ đọc số thực mặc định của
+    pandas có thể lệch bit cuối (vd strength 0.84 thành 0.84000000000000008).
+    Confidence dồn đúng tại ngưỡng (trần 0.85), nên lệch 1 ulp lật được điều
+    kiện `>=` và đổi kết quả backtest. Bug thật 2026-10-08: XRP ra 2.435%
+    từ cache so với 1.875% từ DB, cùng dữ liệu.
+    """
+    df = pd.read_csv(path, index_col=0, parse_dates=True, float_precision="round_trip")
+    validate_components(df)
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Phần thuần
 # ---------------------------------------------------------------------------
 def validate_components(df: pd.DataFrame) -> None:
@@ -169,22 +196,31 @@ def validate_components(df: pd.DataFrame) -> None:
         raise ValueError(f"direction lạ: {bad}")
 
 
+SIDES_BOTH = ("long", "short")
+
+
 def branch_confidence(
     components: pd.DataFrame,
     weights: SignalWeights,
     upper_threshold: float,
     lower_threshold: float,
     min_message_count: int,
+    sides: tuple[str, ...] = SIDES_BOTH,
 ) -> pd.Series:
     """
-    Confidence của một nhánh tại từng nến, dùng ĐÚNG logic realtime:
-    classify_news_status() (N27) + sentiment_alignment()/combine_scores() (N31).
-    Mốc không phải long → 0.0 (mục 3 docstring).
+    Confidence (luôn >= 0) của một nhánh tại từng nến, theo hướng TA của nến
+    đó, dùng ĐÚNG logic realtime: classify_news_status() (N27) +
+    sentiment_alignment()/combine_scores() (N31). Hướng của nến đọc ở cột
+    `direction`. Mốc neutral hoặc hướng không thuộc `sides` → 0.0.
     """
     validate_components(components)
+    bad = set(sides) - set(SIDES_BOTH)
+    if not sides or bad:
+        raise ValueError(f"sides không hợp lệ: {sides}")
     out = np.zeros(len(components))
     for i, row in enumerate(components.itertuples(index=False)):
-        if row.direction != "long":
+        direction = row.direction
+        if direction not in sides:
             continue
         count = int(row.message_count)
         sentiment = row.sentiment
@@ -194,7 +230,7 @@ def branch_confidence(
             status = classify_news_status(
                 score=sentiment,
                 message_count=count,
-                direction="long",
+                direction=direction,
                 upper_threshold=upper_threshold,
                 lower_threshold=lower_threshold,
                 min_message_count=min_message_count,
@@ -202,7 +238,7 @@ def branch_confidence(
         if status == "no_data":
             senti_score = news_score = None
         else:
-            senti_score = sentiment_alignment(float(sentiment), "long")
+            senti_score = sentiment_alignment(float(sentiment), direction)
             news_score = NEWS_STATUS_SCORE[status]
         out[i], _ = combine_scores(
             float(row.strength), senti_score, news_score, weights
@@ -224,14 +260,14 @@ def split_calibration(
 
 def quantile_threshold(confidence: pd.Series, q: float) -> float:
     """
-    Quantile q của các giá trị > 0 (mốc có tín hiệu long). Mốc = 0 là "không
+    Quantile q của các giá trị > 0 (mốc có tín hiệu). Mốc = 0 là "không
     có tín hiệu", gộp vào sẽ kéo ngưỡng về 0 và biến mọi tín hiệu thành lệnh.
     """
     if not 0.0 < q < 1.0:
         raise ValueError(f"q phải trong (0, 1): {q}")
     positive = confidence[confidence > 0]
     if positive.empty:
-        raise ValueError("không có mốc long nào trong đoạn hiệu chỉnh")
+        raise ValueError("không có mốc tín hiệu nào trong đoạn hiệu chỉnh")
     return float(positive.quantile(q))
 
 
@@ -253,12 +289,73 @@ def describe_distribution(values: pd.Series) -> dict:
 
 
 def sentiment_coverage(components: pd.DataFrame, min_message_count: int) -> float:
-    """Tỉ lệ mốc LONG có sentiment đủ tin. Thấp → 3 nhánh gần như trùng nhau."""
-    long_rows = components[components["direction"] == "long"]
-    if long_rows.empty:
+    """
+    Tỉ lệ mốc CÓ HƯỚNG (long/short) có sentiment đủ tin. Thấp → 3 nhánh gần
+    như trùng nhau.
+    """
+    rows = components[components["direction"] != "neutral"]
+    if rows.empty:
         return 0.0
-    ok = (long_rows["message_count"] >= max(1, min_message_count)).mean()
+    ok = (rows["message_count"] >= max(1, min_message_count)).mean()
     return float(ok)
+
+
+def _backtest_two_sided(
+    close: pd.Series,
+    confidence: pd.Series,
+    direction: pd.Series,
+    entry_threshold: float,
+    exit_threshold: float,
+    sl_pct: float,
+    tp_pct: float,
+    fees: float,
+    timeframe: str,
+) -> dict:
+    """
+    Backtest 2 chiều bằng vectorbt. Tín hiệu shift(1) như N12: tính xong ở
+    nến T thì chỉ được vào lệnh ở nến T+1.
+
+    Vào long: hướng (đã shift) = long và confidence >= entry_threshold.
+    `>=` chứ không `>`: trần CONFIDENCE_CAP ép mọi điểm >= 0.85 về đúng 0.85,
+    tạo một khối giá trị trùng nhau. Khi quantile rơi đúng vào khối đó,
+    `>` không bao giờ đúng → 0 lệnh (bug thật ở lần chạy thử 2026-10-08).
+    Thoát long: hướng không còn long, hoặc confidence < exit_threshold.
+    Short đối xứng. Entry và exit cùng chiều không thể cùng True vì
+    exit_threshold < entry_threshold.
+    """
+    import vectorbt as vbt
+
+    from technical_analysis.backtest import _safe_float
+
+    conf = confidence.shift(1)
+    side = direction.shift(1)
+    long_entries = (side == "long") & (conf >= entry_threshold)
+    long_exits = (side != "long") | (conf < exit_threshold)
+    short_entries = (side == "short") & (conf >= entry_threshold)
+    short_exits = (side != "short") | (conf < exit_threshold)
+
+    portfolio = vbt.Portfolio.from_signals(
+        close=close,
+        entries=long_entries,
+        exits=long_exits,
+        short_entries=short_entries,
+        short_exits=short_exits,
+        sl_stop=sl_pct,
+        tp_stop=tp_pct,
+        fees=fees,
+        freq=timeframe,
+    )
+    stats = portfolio.stats()
+    return {
+        "win_rate": _safe_float(stats.get("Win Rate [%]")),
+        "sharpe_ratio": _safe_float(stats.get("Sharpe Ratio")),
+        "max_drawdown": _safe_float(stats.get("Max Drawdown [%]")),
+        "profit_factor": _safe_float(stats.get("Profit Factor")),
+        "total_trades": int(_safe_float(stats.get("Total Trades"))),
+        "total_return": _safe_float(stats.get("Total Return [%]")),
+        "long_entry_signals": int(long_entries.sum()),
+        "short_entry_signals": int(short_entries.sum()),
+    }
 
 
 def run_branch(
@@ -273,41 +370,54 @@ def run_branch(
     exit_quantile: float,
     sl_pct: float,
     tp_pct: float,
+    fees: float = 0.001,
+    sides: tuple[str, ...] = SIDES_BOTH,
     timeframe: str = "1h",
 ) -> dict:
     """
     Chạy một nhánh cho một coin. Trả metric backtest (đoạn đánh giá) cùng
     ngưỡng đã chọn (đoạn hiệu chỉnh).
-    """
-    from technical_analysis.backtest import backtest_confluence_signal
 
+    fees: tỉ lệ phí mỗi lần khớp (0.001 = 0.1%, phí taker spot Binance).
+    Baseline N12 không tính phí; ablation so các nhánh với nhau nên chỉ cần
+    các nhánh cùng phí.
+    """
     if exit_quantile >= entry_quantile:
         raise ValueError(
             f"exit_quantile {exit_quantile} phải < entry_quantile {entry_quantile}"
         )
+    if fees < 0:
+        raise ValueError(f"fees âm: {fees}")
     conf = branch_confidence(
-        components, branch.weights, upper_threshold, lower_threshold, min_message_count
+        components,
+        branch.weights,
+        upper_threshold,
+        lower_threshold,
+        min_message_count,
+        sides=sides,
     )
     calib, evaluation = split_calibration(conf, calib_frac)
     entry_th = quantile_threshold(calib, entry_quantile)
     exit_th = quantile_threshold(calib, exit_quantile)
 
-    eval_df = pd.DataFrame(
-        {"close": components["close"].loc[evaluation.index], "strength": evaluation}
-    )
-    metrics = backtest_confluence_signal(
-        eval_df,
-        timeframe=timeframe,
+    idx = evaluation.index
+    direction = components["direction"].loc[idx]
+    metrics = _backtest_two_sided(
+        close=components["close"].loc[idx],
+        confidence=evaluation,
+        direction=direction.where(direction.isin(sides), "neutral"),
+        entry_threshold=entry_th,
+        exit_threshold=exit_th,
         sl_pct=sl_pct,
         tp_pct=tp_pct,
-        strength_threshold=entry_th,
-        exit_threshold=exit_th,
+        fees=fees,
+        timeframe=timeframe,
     )
     return {
         **metrics,
         "entry_threshold": entry_th,
         "exit_threshold": exit_th,
         "eval_candles": int(len(evaluation)),
-        "eval_start": str(evaluation.index[0]),
-        "eval_end": str(evaluation.index[-1]),
+        "eval_start": str(idx[0]),
+        "eval_end": str(idx[-1]),
     }

@@ -69,23 +69,51 @@ def test_default_branches_nhanh_2_chi_khac_nhanh_3_o_phan_news():
 # ---------------------------------------------------------------------------
 # branch_confidence
 # ---------------------------------------------------------------------------
-def test_moc_khong_phai_long_bang_0():
+def test_moc_neutral_bang_0_moc_short_co_confidence():
     df = _components()
     conf = branch_confidence(df, FULL, **TH)
+    assert (conf[df["direction"] == "neutral"] == 0.0).all()
+    assert (conf[df["direction"] == "short"] > 0).any()
+
+
+def test_sides_chi_long_thi_short_bang_0():
+    df = _components()
+    conf = branch_confidence(df, FULL, **TH, sides=("long",))
     assert (conf[df["direction"] != "long"] == 0.0).all()
+
+
+def test_sides_khong_hop_le_thi_raise():
+    with pytest.raises(ValueError):
+        branch_confidence(_components(10), FULL, **TH, sides=("buy",))
+
+
+def test_short_doi_xung_voi_long():
+    idx = pd.date_range("2026-01-01", periods=2, freq="1h")
+    df = pd.DataFrame(
+        {
+            "close": [100.0, 100.0],
+            "direction": ["long", "short"],
+            "strength": [0.7, 0.7],
+            "sentiment": [0.4, -0.4],
+            "message_count": [3, 3],
+        },
+        index=idx,
+    )
+    conf = branch_confidence(df, FULL, **TH)
+    assert conf.iloc[0] == pytest.approx(conf.iloc[1])
 
 
 def test_ta_only_bang_strength_bi_chan_cap():
     df = _components()
     conf = branch_confidence(df, TA_ONLY_WEIGHTS, **TH)
-    long_mask = df["direction"] == "long"
-    expected = df.loc[long_mask, "strength"].clip(upper=CONFIDENCE_CAP)
-    np.testing.assert_allclose(conf[long_mask], expected)
+    mask = df["direction"] != "neutral"
+    expected = df.loc[mask, "strength"].clip(upper=CONFIDENCE_CAP)
+    np.testing.assert_allclose(conf[mask], expected)
 
 
 def test_moc_khong_co_sentiment_thi_moi_nhanh_bang_ta():
     df = _components()
-    no_senti = (df["direction"] == "long") & (df["message_count"] == 0)
+    no_senti = (df["direction"] != "neutral") & (df["message_count"] == 0)
     assert no_senti.any()
     a = branch_confidence(df, FULL, **TH)[no_senti]
     b = branch_confidence(df, TA_ONLY_WEIGHTS, **TH)[no_senti]
@@ -201,6 +229,74 @@ def test_run_branch_tra_metric_va_huu_han():
     assert res["exit_threshold"] < res["entry_threshold"]
 
 
+def _trend_components(direction: str, n=200) -> pd.DataFrame:
+    """Giá đi một chiều đều đặn, TA luôn báo cùng hướng, strength đổi đều."""
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    step = 1.0 if direction == "long" else -1.0
+    return pd.DataFrame(
+        {
+            "close": 1000.0 + step * np.arange(n),
+            "direction": [direction] * n,
+            "strength": np.tile([0.2, 0.5, 0.9, 0.6], n // 4),
+            "sentiment": [np.nan] * n,
+            "message_count": [0] * n,
+        },
+        index=idx,
+    )
+
+
+@pytest.mark.parametrize("direction", ["long", "short"])
+def test_backtest_hai_chieu_loi_khi_dung_huong(direction):
+    res = run_branch(
+        _trend_components(direction),
+        Branch("ta_only", TA_ONLY_WEIGHTS),
+        **TH,
+        calib_frac=0.5,
+        entry_quantile=0.75,
+        exit_quantile=0.25,
+        sl_pct=0.5,
+        tp_pct=0.5,
+        fees=0.0,
+    )
+    assert res["total_trades"] > 0
+    assert res["total_return"] > 0
+    key = "long_entry_signals" if direction == "long" else "short_entry_signals"
+    other = "short_entry_signals" if direction == "long" else "long_entry_signals"
+    assert res[key] > 0 and res[other] == 0
+
+
+def test_backtest_chi_long_tren_chuoi_toan_short_thi_raise():
+    # sides=("long",) trên chuỗi toàn short: đoạn hiệu chỉnh không có tín
+    # hiệu nào → raise, không âm thầm trả 0 lệnh.
+    with pytest.raises(ValueError):
+        run_branch(
+            _trend_components("short"),
+            Branch("ta_only", TA_ONLY_WEIGHTS),
+            **TH,
+            calib_frac=0.5,
+            entry_quantile=0.75,
+            exit_quantile=0.25,
+            sl_pct=0.5,
+            tp_pct=0.5,
+            sides=("long",),
+        )
+
+
+def test_phi_lam_giam_loi_nhuan():
+    kw = dict(
+        **TH,
+        calib_frac=0.5,
+        entry_quantile=0.75,
+        exit_quantile=0.25,
+        sl_pct=0.5,
+        tp_pct=0.5,
+    )
+    br = Branch("ta_only", TA_ONLY_WEIGHTS)
+    free = run_branch(_trend_components("long"), br, **kw, fees=0.0)
+    paid = run_branch(_trend_components("long"), br, **kw, fees=0.01)
+    assert paid["total_return"] < free["total_return"]
+
+
 def test_run_branch_exit_quantile_phai_nho_hon_entry():
     with pytest.raises(ValueError):
         run_branch(
@@ -294,3 +390,46 @@ async def test_build_component_series_khong_co_nen_thi_raise():
                 end=datetime(2026, 1, 1) + timedelta(days=1),
                 sentiment_window_hours=6,
             )
+
+
+def test_khoi_gia_tri_dung_tran_van_vao_lenh():
+    # Bug thật lần chạy thử 2026-10-08: >25% mốc bị trần 0.85 ép về đúng 0.85,
+    # quantile 0.75 = 0.85, điều kiện `conf > 0.85` không bao giờ đúng → 0 lệnh.
+    df = _trend_components("short")
+    df["strength"] = np.tile([0.3, 0.5, 1.0, 1.0], len(df) // 4)
+    res = run_branch(
+        df,
+        Branch("ta_only", TA_ONLY_WEIGHTS),
+        **TH,
+        calib_frac=0.5,
+        entry_quantile=0.75,
+        exit_quantile=0.25,
+        sl_pct=0.5,
+        tp_pct=0.5,
+        fees=0.0,
+    )
+    assert res["entry_threshold"] == CONFIDENCE_CAP
+    assert res["short_entry_signals"] > 0
+    assert res["total_trades"] > 0
+
+
+def test_cache_csv_round_trip_chinh_xac_tung_bit(tmp_path):
+    # Giá trị THẬT từ cache XRP 2026-10-08: bộ đọc mặc định của pandas làm
+    # tròn 0.44000000000000006 thành 0.44 → kết quả backtest đổi (2.435% so
+    # với 1.875% từ DB) vì confidence dồn đúng tại ngưỡng.
+    from agent.ablation import read_components_csv, write_components_csv
+
+    df = _components(8)
+    df.iloc[0, df.columns.get_loc("strength")] = 0.44000000000000006
+    df.iloc[1, df.columns.get_loc("sentiment")] = -0.09880046339522146
+    df.iloc[1, df.columns.get_loc("message_count")] = 1
+    path = tmp_path / "c.csv"
+    write_components_csv(df, path)
+    back = read_components_csv(path)
+
+    for col in ("close", "strength", "sentiment"):
+        a, b = df[col].to_numpy(), back[col].to_numpy()
+        same = (a == b) | (np.isnan(a) & np.isnan(b))
+        assert same.all(), col
+    assert (back["direction"] == df["direction"]).all()
+    assert (back.index == df.index).all()
