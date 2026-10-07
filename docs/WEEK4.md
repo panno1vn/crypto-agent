@@ -34,9 +34,22 @@ trong tuần — theo mẫu các GHI_CHU trước, mục "Mục tiêu ban đầu
 
 1. **Regression gate 7 vs 6**: N24-25 chốt 7 câu negative control, `roadmap_v2.md`
    tick `[x]`. N26 chỉ chạy 6/6 với ngưỡng <0.20 (khác <0.14 đã chốt).
-   <TODO: xác định câu thứ 7 đi đâu — bị bỏ sót, hay 1 trong 7 câu gốc
-   trùng/lỗi và bị loại có chủ đích? Ghi rõ quyết định + lý do, không
-   im lặng bỏ qua.>
+   **Đã đối chiếu (2026-10-06): loại có chủ đích, không phải bỏ sót.**
+   Bộ 7 câu = 5 câu mới (`GHI_CHU_NGAY24_25.md` §8) + 2 câu cũ
+   ("công thức nấu phở bò", "weather forecast tomorrow"). Câu bị bỏ là
+   **"weather forecast tomorrow"**: §3 của cùng file ghi câu này "không
+   sạch" vì kênh `coin369channel` có đăng tin thời tiết thật. Quyết định
+   bỏ được ghi ngay trong code, `scripts/manual/eval_retrieval_day26.py`
+   dòng 112-114 ("ĐÃ BỎ ... (2026-08-13)"). 6 câu còn lại khớp đúng
+   từng chữ với danh sách N24-25.
+   Về ngưỡng: 0.14 **không phải ngưỡng đã chốt** mà là mức điểm cao nhất
+   quan sát được của mmarco (`GHI_CHU_NGAY24_25.md` §9: "giữ dưới 0.14
+   mọi câu"). 0.20 là ngưỡng gate đặt có biên an toàn
+   (`LOW_SCORE_THRESHOLD`, dòng 132). Ghi chú N28 trước đó đọc nhầm
+   thành "đổi ngưỡng". Giới hạn còn lại: `GHI_CHU_NGAY26.md` chỉ ghi
+   "6/6 dưới 0.20", không ghi điểm từng câu, nên chưa biết lần chạy N26
+   có còn nằm dưới 0.14 hay không (cần xem MLflow
+   `Crypto_Agent_Retrieval_Eval_Day26`).
 2. **Nợ #4 chưa có bằng chứng cứng**: cần chạy
    `grep -n "upsert" -A 5 rag/ingestion.py` (hoặc tương đương) và dán
    đoạn docstring thật vào đây trước khi tick nợ #4 là đóng.
@@ -66,20 +79,11 @@ trong tuần — theo mẫu các GHI_CHU trước, mục "Mục tiêu ban đầu
 Đã xong: unit test (131/131), test end-to-end mới (5/5), nợ #4 (bằng
 chứng cứng trong `rag/ingestion.py`), nợ #1 (đã đóng từ N26).
 
-**Còn đúng 1 việc chặn**, không có nó thì không nên tick "Regression
-gate (7 negative control) pass":
+Regression gate: đã đối chiếu xong (2026-10-06, mục 3.1).
 
-```bash
-# Đối chiếu 7 câu negative control gốc (N24-25, benchmark_reranker.py /
-# benchmark_reranker_round2.py hoặc bộ Pan tự chấm tay) với 6 câu đã
-# chạy thật ở N26 (eval_retrieval_day26.py Bộ B) — tìm câu bị thiếu,
-# và ghi rõ lý do (bỏ sót hay loại có chủ đích) vào mục 3.1 dưới đây
-```
-
-Không có lệnh nào để tự động hóa việc này — cần Pan đọc lại 2 danh
-sách và đối chiếu bằng tay, vì tôi không có quyền truy cập
-`scripts/manual/benchmark_reranker.py` output gốc hay bộ câu N24-25
-Pan tự chấm tay.
+**(Đã đóng 2026-10-08, xem mục 6.)** Việc chặn cũ: xác minh `dag_embed_messages` GREEN. Việc này cần
+stack docker đang chạy; lúc kiểm tra ngày 2026-10-06, lệnh `docker`
+không có trong WSL.
 
 ## 5. Cập nhật áp dụng vào `crypto_agent_roadmap_v2.md`
 
@@ -88,16 +92,16 @@ Pan tự chấm tay.
 - [ ] Bảng "Nợ Kỹ Thuật Đang Treo": đánh dấu #1 ĐÓNG (N26, gap=-0.066),
       #4 ĐÓNG (N27) **chỉ sau khi có bằng chứng cứng mục 3.2**
 - [ ] Bảng "Tiêu Chuẩn Chất Lượng": Unit test pass 117/117 → số thật N28
-- [ ] Ghi rõ quyết định về câu negative control thứ 7 (mục 3.1)
+- [x] Ghi rõ quyết định về câu negative control thứ 7 (mục 3.1)
 
 ## 6. Milestone Tuần 4 — trạng thái thật (không làm tròn)
 
 - [x] IR metrics đo được, có baseline trong MLflow
 - [x] Metadata filtering đúng theo coin + timeframe (N24-25)
 - [x] Cross-Encoder reranking hoạt động
-- [ ] Regression gate — **vẫn chưa xác nhận vì lệch 7 vs 6** (mục 3.1) — MỤC DUY NHẤT CÒN CHẶN
+- [x] Regression gate: 6/6 dưới 0.20 (`GHI_CHU_NGAY26.md` Bộ B); câu thứ 7 bị loại có chủ đích (mục 3.1)
 - [x] News-technical confirmation hoạt động, phân biệt `no_data` vs `neutral` — xác nhận thêm bởi test end-to-end N28 (5/5 pass, chạm cả Postgres lẫn Chroma thật)
-- [ ] `dag_embed_messages` GREEN — <TODO: verify lại trạng thái hiện tại, chưa ai kiểm tra trong phiên N28>
+- [x] `dag_embed_messages` GREEN — **xác minh 2026-10-08, sau khi sửa bug**: DAG ImportError mọi lần chạy từ 2026-08-13 (`get_last_embedded_id` đã bị xóa khỏi `rag/ingestion.py`). Sau khi sửa: run `manual__2026-10-07T18:58:17` success, upsert 3043; Chroma 30351 = Postgres 30351. Xem `docs/nhat-ky/2026-10-08_bug_dag-embed-messages-importerror-moi-lan-chay-tu-2026-08-13.md`
 - [x] RAGAS > 0.70 dời N34-35 (đúng kế hoạch, không phải trượt)
 
 ## 7. Commit
