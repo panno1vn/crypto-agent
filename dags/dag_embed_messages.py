@@ -4,8 +4,10 @@ dags/dag_embed_messages.py
 Ngày 23 — DAG embed tin nhắn mới vào ChromaDB.
 
 QUYẾT ĐỊNH KIẾN TRÚC:
-Watermark (id cuối cùng đã embed) được ĐỌC NGƯỢC từ chính Chroma mỗi
-lần task chạy (`get_last_embedded_id`), KHÔNG lưu vào Airflow Variable
+Watermark (id cuối cùng đã embed, TÍNH THEO TỪNG KÊNH từ 2026-08-13) được
+ĐỌC NGƯỢC từ chính Chroma mỗi lần task chạy
+(`rag.ingestion.get_last_embedded_id_for_channel`, gọi bên trong
+`run_ingestion()`), KHÔNG lưu vào Airflow Variable
 hay bảng riêng. Cùng triết lý với `enrich_fingerprint`/`hnsw:space` ở
 rag/vector_store.py: nguồn sự thật là đích đến, không phải state phụ có
 thể lệch pha nếu task bị kill giữa chừng. Hệ quả: task fail/timeout thì
@@ -56,20 +58,20 @@ def run_embed_messages():
     import asyncio
 
     from data_pipeline.logger import get_logger
-    from rag.ingestion import get_last_embedded_id, run_ingestion
-    from rag.vector_store import get_collection
+    from rag.ingestion import run_ingestion
 
     logger = get_logger(__name__)
 
     async def _run():
-        # Lấy collection trước để đọc watermark — fail nhanh (mismatch
-        # hnsw:space hoặc enrich_fingerprint) trước khi tốn thời gian
-        # load model embedding.
-        collection = get_collection()
-        after_id = get_last_embedded_id(collection)
-        logger.info(f"[DAG] dag_embed_messages bắt đầu, after_id={after_id}")
-
-        stats = await run_ingestion(after_id=after_id)
+        # (2026-10-08) Watermark tính THEO KÊNH bên trong run_ingestion()
+        # (sửa bug 2026-08-13). Bản cũ gọi get_last_embedded_id() toàn cục
+        # và run_ingestion(after_id=...) — cả hai đã bị xóa khỏi
+        # rag/ingestion.py nhưng DAG không được sửa theo, nên DAG ImportError
+        # mọi lần chạy từ đó. tests/unit/test_dag_imports.py chặn lặp lại.
+        # run_ingestion() tự get_collection() trước khi load model, vẫn fail
+        # nhanh nếu Chroma sai space/fingerprint.
+        logger.info("[DAG] dag_embed_messages bắt đầu")
+        stats = await run_ingestion()
         logger.info(f"[DAG] dag_embed_messages xong: {stats}")
 
     try:
