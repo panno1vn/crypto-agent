@@ -31,3 +31,6 @@ crypto_agent_roadmap_v2.md
 
 # Claude Code tự ghi khi chọn "don't ask again"; cấu hình riêng từng máy.
 .claude/settings.local.json
+
+# Ngày 32: cache chuỗi thành phần ablation (sinh lại được từ DB)
+data/ablation_cache/
