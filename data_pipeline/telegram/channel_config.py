@@ -24,6 +24,42 @@ logger = get_logger(__name__)
 
 DEFAULT_CONFIG_PATH = Path("config/channels.yaml")
 
+# Kênh vẫn còn dữ liệu cũ trong telegram_messages nhưng KHÔNG được catch-up
+# nữa. DAG telegram_realtime_sync lấy danh sách kênh từ
+# `SELECT DISTINCT channel_name`, nên không xóa kênh khỏi DB được (mất lịch
+# sử) — loại trừ ở đây. Đặt trong data_pipeline/ (đã mount vào container
+# Airflow), không đặt trong config/channels.yaml (config/ KHÔNG được mount).
+# Mỗi kênh phải kèm lý do + ngày để còn xét lại.
+EXCLUDED_CHANNELS: dict[str, str] = {
+    "RIC_Capital_Channel": (
+        "2026-10-08: UsernameInvalidError ('Nobody is using this username'), "
+        "làm DAG đỏ mỗi 15 phút"
+    ),
+}
+
+
+def filter_excluded(
+    channels: list[str], excluded: Optional[dict[str, str]] = None
+) -> list[str]:
+    """
+    Bỏ các kênh trong EXCLUDED_CHANNELS khỏi danh sách, giữ nguyên thứ tự.
+
+    Log từng kênh bị bỏ (kèm lý do) để việc loại trừ không bao giờ im lặng.
+    Kênh nằm trong danh sách loại trừ nhưng không có trong `channels` cũng
+    được log WARNING: có thể tên sai chính tả, loại trừ không có tác dụng.
+    """
+    excluded = EXCLUDED_CHANNELS if excluded is None else excluded
+    kept = [ch for ch in channels if ch not in excluded]
+    for ch, reason in excluded.items():
+        if ch in channels:
+            logger.info(f"[CHANNEL_CONFIG] Bỏ qua kênh {ch}: {reason}")
+        else:
+            logger.warning(
+                f"[CHANNEL_CONFIG] Kênh loại trừ {ch} không có trong danh sách "
+                f"— sai tên? Loại trừ này không có tác dụng."
+            )
+    return kept
+
 
 def _normalize(username: str) -> str:
     """Bỏ dấu '@' ở đầu nếu có, strip khoảng trắng thừa."""

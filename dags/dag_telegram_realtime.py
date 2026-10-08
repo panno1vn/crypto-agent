@@ -34,6 +34,7 @@ def run_telegram_sync():
     from dotenv import load_dotenv
     from telethon import TelegramClient
 
+    from data_pipeline.telegram.channel_config import filter_excluded
     from data_pipeline.telegram.historical_scraper import (
         DatabaseWriter,
         scrape_channel_history,
@@ -56,7 +57,7 @@ def run_telegram_sync():
             channel_rows = await conn.fetch(
                 "SELECT DISTINCT channel_name FROM telegram_messages"
             )
-            channels = [r["channel_name"] for r in channel_rows]
+            channels = filter_excluded([r["channel_name"] for r in channel_rows])
             max_id_rows = await conn.fetch(
                 "SELECT channel_name, MAX(id) AS max_id "
                 "FROM telegram_messages GROUP BY channel_name"
