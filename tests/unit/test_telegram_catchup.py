@@ -29,6 +29,9 @@ class FakeClient:
         ids = self.ids
         if "min_id" in kw:
             ids = [i for i in ids if i > kw["min_id"]]
+        if "max_id" in kw:
+            # Telethon: max_id KHÔNG gồm biên (message.id >= max_id thì dừng).
+            ids = [i for i in ids if i < kw["max_id"]]
         ids = ids if kw.get("reverse") else list(reversed(ids))
         ids = ids[:limit]
 
@@ -94,3 +97,22 @@ async def test_loi_kenh_duoc_raise_khong_bi_nuot():
     # DAG catch-up báo success dù kênh không tồn tại.
     with pytest.raises(RuntimeError):
         await _collect(ErrorClient(), limit=10, min_message_id=1, oldest_first=True)
+
+
+async def test_khoang_id_lay_dung_lo_khong_gom_bien():
+    # Backfill lỗ: tin 340009 và 358068 đã có trong DB, lấy đúng phần giữa.
+    client = FakeClient(range(340000, 358100))
+    got = await _collect(
+        client,
+        limit=None,
+        min_message_id=340009,
+        max_message_id=358068,
+        oldest_first=True,
+    )
+    assert got == list(range(340010, 358068))
+    assert client.calls[0] == {"min_id": 340009, "max_id": 358068, "reverse": True}
+
+
+async def test_max_message_id_khong_oldest_first_thi_raise():
+    with pytest.raises(ValueError):
+        await _collect(FakeClient([1, 2]), limit=10, max_message_id=2)

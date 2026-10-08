@@ -167,10 +167,11 @@ class CheckpointManager:
 async def scrape_channel_history(
     client: TelegramClient,
     channel: str,
-    limit: int = 5000,
+    limit: Optional[int] = 5000,  # None = không giới hạn (Telethon)
     offset_date: Optional[datetime] = None,
     min_message_id: Optional[int] = None,  # resume từ checkpoint
     oldest_first: bool = False,
+    max_message_id: Optional[int] = None,
 ) -> AsyncGenerator[TelegramMessage, None]:
     """
     Async generator — yield từng TelegramMessage validated.
@@ -187,9 +188,15 @@ async def scrape_channel_history(
         lưu, watermark MAX(id) nhảy lên đỉnh và phần ở giữa mất vĩnh viễn
         (coin369channel mất 2026-08-19 → 10-06). Backfill sâu (lùi về quá
         khứ theo offset_date) vẫn dùng mặc định newest-first.
+      - max_message_id (2026-10-08, backfill lỗ): chỉ lấy tin có id
+        < max_message_id (Telethon `max_id`, KHÔNG gồm biên — xem
+        telethon/client/messages.py `message.id >= self.max_id`). Chỉ dùng
+        cùng oldest_first: lấy đúng khoảng (min_message_id, max_message_id).
     """
     if oldest_first and min_message_id is None:
         raise ValueError("oldest_first=True cần min_message_id (watermark)")
+    if max_message_id is not None and not oldest_first:
+        raise ValueError("max_message_id chỉ dùng với oldest_first=True")
     message_count = 0
 
     next_rest_target = random.randint(35, 65)
@@ -201,9 +208,10 @@ async def scrape_channel_history(
 
     try:
         if oldest_first:
-            iterator = client.iter_messages(
-                channel, limit=limit, min_id=min_message_id, reverse=True
-            )
+            range_kw = {"min_id": min_message_id, "reverse": True}
+            if max_message_id is not None:
+                range_kw["max_id"] = max_message_id
+            iterator = client.iter_messages(channel, limit=limit, **range_kw)
         else:
             iterator = client.iter_messages(
                 channel,

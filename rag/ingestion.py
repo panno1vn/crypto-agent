@@ -91,6 +91,23 @@ _FETCH_SQL = """
     LIMIT $3
 """
 
+_FETCH_BY_IDS_SQL = """
+    SELECT id, channel_name, message_text, language,
+           views, forwards, coins_mentioned, created_at,
+           has_media, reply_count
+    FROM telegram_messages
+    WHERE message_text IS NOT NULL
+      AND channel_name = $1
+      AND id = ANY($2::bigint[])
+    ORDER BY id
+"""
+
+_ALL_KEYS_SQL = """
+    SELECT channel_name, id
+    FROM telegram_messages
+    WHERE message_text IS NOT NULL
+"""
+
 _CHANNELS_SQL = """
     SELECT DISTINCT channel_name
     FROM telegram_messages
@@ -149,6 +166,16 @@ async def fetch_messages(
         return [], after_id, 0
 
     max_raw_id = max(row["id"] for row in rows)
+    return _rows_to_messages(rows), max_raw_id, len(rows)
+
+
+def _rows_to_messages(rows) -> list[TelegramMessage]:
+    """
+    Dựng TelegramMessage từ các dòng _FETCH_SQL / _FETCH_BY_IDS_SQL.
+
+    Dòng không dựng được (vd text quá ngắn theo validator) bị bỏ qua nhưng
+    LUÔN log WARNING kèm id.
+    """
     messages: list[TelegramMessage] = []
     skipped = 0
 
@@ -175,7 +202,7 @@ async def fetch_messages(
     if skipped:
         logger.warning(f"[INGEST] Trang này bỏ qua {skipped}/{len(rows)} dòng")
 
-    return messages, max_raw_id, len(rows)
+    return messages
 
 
 async def count_candidates(pool: asyncpg.Pool) -> int:
@@ -394,3 +421,63 @@ if __name__ == "__main__":  # pragma: no cover
 
     load_dotenv()
     asyncio.run(run_ingestion(max_messages=100))
+
+
+async def run_embed_missing(
+    dsn: "str | None" = None,
+    page_size: int = INGEST_PAGE_SIZE,
+) -> dict[str, Any]:
+    """
+    Embed mọi tin có trong Postgres mà CHƯA có trong Chroma, so theo
+    chroma_id(kênh, msg_id) — không dùng watermark.
+
+    Vì sao cần: run_ingestion chỉ lấy id > watermark Chroma của kênh. Tin
+    được backfill vào một LỖ (id nhỏ hơn watermark, vd lỗ coin369channel
+    2026-08-19 → 10-06) nằm dưới watermark nên DAG embed bỏ qua vĩnh viễn
+    mà vẫn success.
+
+    Returns:
+        Dict: missing_by_channel (số tin thiếu trước khi chạy), upserted,
+        collection_count.
+    """
+    dsn = dsn or get_db_dsn()
+    collection = get_collection()
+
+    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=3)
+    upserted = 0
+    missing_by_channel: dict[str, list[int]] = {}
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(_ALL_KEYS_SQL)
+        embedded = set(collection.get(include=[])["ids"])
+        for row in rows:
+            if chroma_id(row["channel_name"], row["id"]) not in embedded:
+                missing_by_channel.setdefault(row["channel_name"], []).append(row["id"])
+        logger.info(
+            f"[EMBED_MISSING] Thiếu trong Chroma: "
+            f"{ {ch: len(ids) for ch, ids in missing_by_channel.items()} }"
+        )
+
+        for channel, ids in missing_by_channel.items():
+            ids.sort()
+            for start in range(0, len(ids), page_size):
+                page = ids[start : start + page_size]
+                async with pool.acquire() as conn:
+                    page_rows = await conn.fetch(_FETCH_BY_IDS_SQL, channel, page)
+                messages = _rows_to_messages(page_rows)
+                if messages:
+                    upserted += embed_and_store(messages, collection=collection)
+                logger.info(
+                    f"[EMBED_MISSING] kênh={channel} "
+                    f"{min(start + page_size, len(ids))}/{len(ids)}"
+                )
+    finally:
+        await pool.close()
+
+    stats = {
+        "missing_by_channel": {ch: len(ids) for ch, ids in missing_by_channel.items()},
+        "upserted": upserted,
+        "collection_count": collection.count(),
+    }
+    logger.info(f"[EMBED_MISSING] Xong: {stats}")
+    return stats
