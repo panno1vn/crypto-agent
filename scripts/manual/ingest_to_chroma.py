@@ -15,8 +15,9 @@ Cách dùng:
     # Xóa sạch và làm lại từ đầu (khi đổi enricher hoặc đổi model)
     python scripts/manual/ingest_to_chroma.py --reset
 
-    # Tiếp tục từ id đã dừng
-    python scripts/manual/ingest_to_chroma.py --after-id 483920
+    # Tiếp tục chỗ đã dừng: chạy lại không tham số. Watermark tính theo
+    # từng kênh từ chính Chroma (rag/ingestion.py). --after-id đã bỏ
+    # 2026-10-08: run_ingestion() không còn tham số after_id từ 2026-08-13.
 
 Lưu ý: `load_dotenv()` phải chạy TRƯỚC khi import rag.* vì rag/config.py
 đọc os.environ ngay lúc import.
@@ -51,12 +52,6 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Số tin tối đa xử lý. Bỏ trống = chạy hết.",
-    )
-    parser.add_argument(
-        "--after-id",
-        type=int,
-        default=0,
-        help="Bắt đầu từ message id lớn hơn giá trị này.",
     )
     parser.add_argument(
         "--reset",
@@ -122,7 +117,7 @@ def main() -> None:
             return
         reset_collection()
 
-    stats = asyncio.run(run_ingestion(after_id=args.after_id, max_messages=args.limit))
+    stats = asyncio.run(run_ingestion(max_messages=args.limit))
 
     print("\n=== Kết quả ===")
     for key, value in stats.items():

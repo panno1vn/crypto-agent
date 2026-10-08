@@ -9,6 +9,9 @@ bug watermark theo kênh), nhưng dags/dag_embed_messages.py vẫn import tên
 cũ. DAG import module của repo BÊN TRONG thân hàm (để scheduler parse nhanh),
 nên lỗi chỉ lộ ra lúc task chạy: ImportError mọi lần, gần 2 tháng.
 
+2026-10-08 (nợ #15): mở rộng sang scripts/manual/*.py — ingest_to_chroma.py
+cũng gọi run_ingestion(after_id=...) đã bị xóa, chỉ lộ ra khi cần chạy tay.
+
 Test này đọc AST của từng file DAG (không import file DAG, vì local không có
 Airflow), tìm mọi `from <package của repo> import ...`, rồi kiểm:
   1. Tên được import có tồn tại trong module.
@@ -23,7 +26,9 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-DAG_FILES = sorted((REPO / "dags").glob("*.py"))
+DAG_FILES = sorted((REPO / "dags").glob("*.py")) + sorted(
+    (REPO / "scripts" / "manual").glob("*.py")
+)
 REPO_PACKAGES = {"agent", "data_pipeline", "nlp", "rag", "technical_analysis"}
 
 
