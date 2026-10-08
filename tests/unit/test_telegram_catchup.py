@@ -12,7 +12,10 @@ from types import SimpleNamespace
 import pytest
 
 from data_pipeline.telegram import historical_scraper
-from data_pipeline.telegram.historical_scraper import scrape_channel_history
+from data_pipeline.telegram.historical_scraper import (
+    scrape_channel_history,
+    scrape_message_ids,
+)
 
 TEXT = "BTC vượt kháng cự, thị trường đang rất sôi động hôm nay"
 
@@ -116,3 +119,37 @@ async def test_khoang_id_lay_dung_lo_khong_gom_bien():
 async def test_max_message_id_khong_oldest_first_thi_raise():
     with pytest.raises(ValueError):
         await _collect(FakeClient([1, 2]), limit=10, max_message_id=2)
+
+
+class FakeIdsClient:
+    """Mô phỏng iter_messages(ids=...): None cho id không có; tin không text."""
+
+    def __init__(self, existing, no_text=()):
+        self.existing = set(existing)
+        self.no_text = set(no_text)
+        self.calls = []
+
+    def iter_messages(self, channel, ids=None, **kw):
+        self.calls.append(ids)
+
+        async def gen():
+            for i in ids:
+                if i not in self.existing:
+                    yield None
+                    continue
+                yield SimpleNamespace(
+                    id=i,
+                    text="" if i in self.no_text else TEXT,
+                    views=None,
+                    forwards=0,
+                    date=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                )
+
+        return gen()
+
+
+async def test_scrape_message_ids_bo_id_khong_ton_tai_va_tin_khong_text():
+    client = FakeIdsClient(existing=[3, 5, 9], no_text=[5])
+    got = [m.id async for m in scrape_message_ids(client, "kenh", ids=[3, 4, 5, 9])]
+    assert got == [3, 9]
+    assert client.calls == [[3, 4, 5, 9]]

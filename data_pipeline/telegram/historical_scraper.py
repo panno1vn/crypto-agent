@@ -164,6 +164,54 @@ class CheckpointManager:
 # ---------------------------------------------------------------------------
 # Async Generator — scrape_channel_history
 # ---------------------------------------------------------------------------
+def parse_message(message, channel: str) -> Optional[TelegramMessage]:
+    """
+    Telethon Message -> TelegramMessage. None nếu không có text hoặc không
+    qua validator (vd text < 10 ký tự) — log DEBUG, không phải lỗi.
+    """
+    if not message.text:
+        return None
+    try:
+        return TelegramMessage(
+            id=message.id,
+            channel_name=channel,
+            message_text=message.text,
+            language=detect_language(message.text),
+            views=getattr(message, "views", 0) or 0,
+            forwards=getattr(message, "forwards", 0) or 0,
+            created_at=message.date,
+            coins_mentioned=extract_coins(message.text),
+        )
+    except ValueError as e:
+        logger.debug(f"[SKIP] id={message.id} reason={e}")
+        return None
+
+
+async def scrape_message_ids(
+    client: TelegramClient,
+    channel: str,
+    ids: list[int],
+) -> AsyncGenerator[TelegramMessage, None]:
+    """
+    Lấy đúng các msg_id cho trước của 1 kênh (2026-10-08, nợ #15: id lẻ bị
+    bỏ vì trùng id kênh khác, không nằm thành khoảng liền nên không dùng
+    min_id/max_id được).
+
+    Telethon `iter_messages(ids=...)` gửi 100 id mỗi request, tự chờ 10s
+    giữa các request khi > 300 id, trả None cho id không tồn tại/đã xóa.
+    FloodWaitError và lỗi khác RAISE (cùng nguyên tắc scrape_channel_history).
+    """
+    found = 0
+    async for message in client.iter_messages(channel, ids=ids):
+        if message is None:
+            continue
+        parsed = parse_message(message, channel)
+        if parsed is not None:
+            found += 1
+            yield parsed
+    logger.info(f"[SCRAPER] Done channel={channel} ids={len(ids)} valid={found}")
+
+
 async def scrape_channel_history(
     client: TelegramClient,
     channel: str,
@@ -227,25 +275,10 @@ async def scrape_channel_history(
                 )
                 return
 
-            if not message.text:
-                continue
-
-            try:
-                parsed_msg = TelegramMessage(
-                    id=message.id,
-                    channel_name=channel,
-                    message_text=message.text,
-                    language=detect_language(message.text),
-                    views=getattr(message, "views", 0) or 0,
-                    forwards=getattr(message, "forwards", 0) or 0,
-                    created_at=message.date,
-                    coins_mentioned=extract_coins(message.text),
-                )
+            parsed_msg = parse_message(message, channel)
+            if parsed_msg is not None:
                 yield parsed_msg
                 message_count += 1
-
-            except ValueError as e:
-                logger.debug(f"[SKIP] id={message.id} reason={e}")
 
             # --- Humanized throttling ---
             if message_count >= next_rest_target:
