@@ -124,6 +124,9 @@ with DAG(
     schedule_interval="*/15 * * * *",
     start_date=datetime(2024, 1, 1),
     catchup=False,
+    # (2026-10-08) 2 run cùng lúc (trigger tay + scheduled) cùng mở file
+    # session SQLite "crypto_session_dag_catchup" → "database is locked".
+    max_active_runs=1,
     tags=["crypto", "telegram"],
 ) as dag:
     task_sync_telegram = PythonOperator(
