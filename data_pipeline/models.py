@@ -59,9 +59,14 @@ class TelegramChannel(Base):
 class TelegramMessage(Base):
     __tablename__ = "telegram_messages"
 
-    id = Column(BigInteger, primary_key=True)
+    # Khóa chính (channel_name, id) — nợ #15, migration e7c2a9d41f05.
+    # `id` là msg_id của Telegram, chỉ duy nhất TRONG 1 kênh. Khóa cũ
+    # PRIMARY KEY (id) + ON CONFLICT (id) DO NOTHING bỏ im lặng tin của
+    # kênh khác trùng id (đo 2026-10-08: ước tính ~2.300 tin).
+    # autoincrement=False: id luôn do Telegram cấp, không bao giờ tự sinh.
+    id = Column(BigInteger, primary_key=True, autoincrement=False)
     channel_id = Column(BigInteger, ForeignKey("telegram_channels.id"), nullable=True)
-    channel_name = Column(String(100), nullable=False)
+    channel_name = Column(String(100), primary_key=True, nullable=False)
     message_text = Column(Text, nullable=True)
     language = Column(String(10), nullable=True)
     has_media = Column(Boolean, default=False, nullable=False)

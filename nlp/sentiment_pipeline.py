@@ -15,10 +15,9 @@ những gì các analyzer (PhoBERT/FinBERT/XLM-R) đã cần sẵn.
 """
 
 from datetime import datetime, timezone
-from typing import Optional, Set
+from typing import Optional, Set, Tuple
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, tuple_
 
 from data_pipeline.logger import get_logger
 from data_pipeline.models import TelegramMessage
@@ -77,7 +76,7 @@ async def process_unprocessed_messages(
 
     total_processed = 0
     total_failed = 0
-    attempted_ids: Set[int] = set()
+    attempted_ids: Set[Tuple[str, int]] = set()
 
     while True:
         async with session_factory() as session:
@@ -87,8 +86,15 @@ async def process_unprocessed_messages(
                 .where(TelegramMessage.message_text.is_not(None))
             )
             if attempted_ids:
-                stmt = stmt.where(TelegramMessage.id.notin_(attempted_ids))
-            stmt = stmt.order_by(TelegramMessage.id).limit(batch_size)
+                # Khóa (channel_name, id) — nợ #15: chỉ lọc theo id sẽ bỏ
+                # nhầm tin kênh khác có cùng msg_id.
+                stmt = stmt.where(
+                    tuple_(TelegramMessage.channel_name, TelegramMessage.id).notin_(
+                        attempted_ids
+                    )
+                )
+            stmt = stmt.order_by(TelegramMessage.id, TelegramMessage.channel_name)
+            stmt = stmt.limit(batch_size)
 
             try:
                 result = await session.execute(stmt)
@@ -133,9 +139,9 @@ async def process_unprocessed_messages(
                     # được, làm câu NOT IN(...) ngày càng chậm mà không
                     # mang lại lợi ích gì (đã quan sát thấy: 2s -> 11s
                     # mỗi 100 message trên 1 lần chạy thật ~3900 message).
-                    attempted_ids.add(msg.id)
+                    attempted_ids.add((msg.channel_name, msg.id))
                     logger.error(
-                        f"[SENTIMENT] Lỗi phân tích message id={msg.id}: {e}",
+                        f"[SENTIMENT] Lỗi phân tích message {msg.channel_name}:{msg.id}: {e}",
                         exc_info=True,
                     )
                     # KHÔNG set is_processed=True — để được thử lại ở lần

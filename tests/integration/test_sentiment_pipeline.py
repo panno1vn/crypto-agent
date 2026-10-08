@@ -138,7 +138,9 @@ async def test_process_marks_successful_messages_as_processed(db_session, db_eng
     )
     assert count == 1
 
-    refreshed = await db_session.get(TelegramMessage, 900001)
+    refreshed = await db_session.get(
+        TelegramMessage, {"channel_name": "test_channel", "id": 900001}
+    )
     await db_session.refresh(refreshed)
     assert refreshed.is_processed is True
     assert refreshed.sentiment_label == "positive"
@@ -177,7 +179,9 @@ async def test_failed_message_is_not_marked_processed(db_session, db_engine):
     )
     assert count == 0
 
-    refreshed = await db_session.get(TelegramMessage, 900002)
+    refreshed = await db_session.get(
+        TelegramMessage, {"channel_name": "test_channel", "id": 900002}
+    )
     await db_session.refresh(refreshed)
     assert refreshed.is_processed is False
     assert refreshed.sentiment_label is None
@@ -213,7 +217,9 @@ async def test_none_result_still_marks_processed(db_session, db_engine):
     )
     assert count == 1  # tính là "đã xử lý" dù kết quả None
 
-    refreshed = await db_session.get(TelegramMessage, 900003)
+    refreshed = await db_session.get(
+        TelegramMessage, {"channel_name": "test_channel", "id": 900003}
+    )
     await db_session.refresh(refreshed)
     assert refreshed.is_processed is True
     assert refreshed.sentiment_label is None
@@ -252,9 +258,64 @@ async def test_infinite_retry_guard_within_single_run(db_session, db_engine):
     )
     assert count == 0
 
-    refreshed = await db_session.get(TelegramMessage, 900004)
+    refreshed = await db_session.get(
+        TelegramMessage, {"channel_name": "test_channel", "id": 900004}
+    )
     await db_session.refresh(refreshed)
     assert refreshed.is_processed is False
+
+
+@pytest.mark.asyncio
+async def test_tin_loi_khong_chan_tin_kenh_khac_cung_msg_id(db_session, db_engine):
+    """
+    Nợ #15: hai kênh cùng msg_id là hai tin KHÁC NHAU. Tin kênh A lỗi
+    không được loại luôn tin kênh B khỏi batch (code cũ lọc
+    `id NOT IN attempted_ids` nên B bị bỏ qua cả lần chạy).
+    """
+    bad_text = "Tin kênh A luôn lỗi."
+    good_text = "Tin kênh B phân tích được."
+    for channel, text in (("kenh_a", bad_text), ("kenh_b", good_text)):
+        db_session.add(
+            TelegramMessage(
+                id=900005,
+                channel_name=channel,
+                message_text=text,
+                language="vi",
+                views=0,
+                forwards=0,
+                created_at=_utc_naive(),
+                coins_mentioned=[],
+                is_processed=False,
+            )
+        )
+    await db_session.commit()
+
+    analyzer = _StubAnalyzer(
+        canned={
+            good_text: SentimentResult(
+                label="positive",
+                score=0.8,
+                confidence=0.8,
+                language="vi",
+                model_used="phobert-v2-stub",
+            )
+        },
+        fail_on={bad_text},
+    )
+
+    # ORDER BY (id, channel_name) đưa kenh_a lên trước; batch_size=1 để
+    # vòng sau phải lọc theo attempted_ids.
+    count = await process_unprocessed_messages(
+        session_factory=_session_factory_from(db_engine),
+        analyzer=analyzer,
+        batch_size=1,
+    )
+    assert count == 1
+
+    b = await db_session.get(TelegramMessage, {"channel_name": "kenh_b", "id": 900005})
+    await db_session.refresh(b)
+    assert b.is_processed is True
+    assert b.sentiment_label == "positive"
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +431,11 @@ async def test_aggregate_coin_sentiment_uses_channel_credibility(db_session):
     low_summary = await aggregate_coin_sentiment(db_session, coin="SOL", window_hours=4)
 
     # Xoá message low-cred, thêm message high-cred cùng score/engagement
-    await db_session.delete(await db_session.get(TelegramMessage, 920001))
+    await db_session.delete(
+        await db_session.get(
+            TelegramMessage, {"channel_name": "low_cred", "id": 920001}
+        )
+    )
     await db_session.flush()
     db_session.add(
         TelegramMessage(

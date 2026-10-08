@@ -278,7 +278,9 @@ class DatabaseWriter:
     Async bulk upsert TelegramMessage vào PostgreSQL.
 
     Dùng asyncpg trực tiếp để tận dụng executemany() hiệu quả hơn ORM.
-    ON CONFLICT (id) DO NOTHING — safe để chạy lại nhiều lần.
+    ON CONFLICT (channel_name, id) DO NOTHING — safe để chạy lại nhiều lần.
+    msg_id chỉ duy nhất trong 1 kênh nên conflict target PHẢI gồm channel_name
+    (nợ #15: target cũ (id) bỏ im lặng tin kênh khác trùng id).
     """
 
     def __init__(self, dsn: str, batch_size: int = 100):
@@ -348,7 +350,7 @@ class DatabaseWriter:
                     has_media, views, forwards, reply_count,
                     coins_mentioned, created_at, ingested_at, is_processed
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                ON CONFLICT (id) DO NOTHING
+                ON CONFLICT (channel_name, id) DO NOTHING
                 """,
                 records,
             )
