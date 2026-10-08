@@ -186,6 +186,21 @@ async def count_candidates(pool: asyncpg.Pool) -> int:
         )
 
 
+class LegacyChromaIdError(RuntimeError):
+    """Collection còn id kiểu cũ (msg_id trần) — xem chroma_id()."""
+
+
+def chroma_id(channel: str, msg_id: int) -> str:
+    """
+    Id Chroma của một tin: "{channel}:{msg_id}".
+
+    msg_id Telegram chỉ duy nhất trong 1 kênh (nợ #15). Id trần str(msg_id)
+    làm upsert của kênh B GHI ĐÈ tin kênh A cùng msg_id, ngay khi Postgres
+    đã lưu được cả hai (khóa (channel_name, id)).
+    """
+    return f"{channel}:{msg_id}"
+
+
 def get_last_embedded_id_for_channel(collection, channel: str) -> int:
     """
     Watermark THẬT từ Chroma, tính RIÊNG cho từng kênh (đúng nguyên tắc
@@ -205,7 +220,17 @@ def get_last_embedded_id_for_channel(collection, channel: str) -> int:
     """
     result = collection.get(where={"channel": channel}, include=[])
     ids = result["ids"]
-    return max((int(i) for i in ids), default=0)
+    prefix = f"{channel}:"
+    legacy = [i for i in ids if not i.startswith(prefix)]
+    if legacy:
+        # Collection embed trước nợ #15 (id = msg_id trần). Trộn 2 kiểu id
+        # thì tin cũ không bị thay mà nằm song song → RAG trả trùng.
+        raise LegacyChromaIdError(
+            f"Kênh '{channel}' có {len(legacy)} id Chroma không theo dạng "
+            f"'{{channel}}:{{msg_id}}' (vd {legacy[:3]}). Collection embed "
+            f"trước migration e7c2a9d41f05 — phải xóa collection và embed lại."
+        )
+    return max((int(i[len(prefix) :]) for i in ids), default=0)
 
 
 # ---------------------------------------------------------------------------
@@ -219,9 +244,8 @@ def embed_and_store(
     """
     Enrich → embed → upsert một lô tin nhắn vào ChromaDB.
 
-    Hàm này không quan tâm tin thuộc kênh nào — an toàn giữ nguyên
-    không đổi, vì lỗi watermark nằm ở tầng ĐỌC (fetch theo kênh nào,
-    từ đâu), không phải tầng GHI.
+    Id ghi vào Chroma là chroma_id(channel, msg_id) — PHẢI gồm kênh
+    (nợ #15), nếu không tin 2 kênh cùng msg_id ghi đè nhau.
 
     Args:
         messages:   Tin nhắn cần embed. Rỗng thì không làm gì.
@@ -239,7 +263,7 @@ def embed_and_store(
 
     texts = [enrich_message_for_embedding(m) for m in messages]
     metadatas: list[dict[str, Any]] = [build_metadata(m) for m in messages]
-    ids = [str(m.id) for m in messages]
+    ids = [chroma_id(m.channel_name, m.id) for m in messages]
 
     embeddings = get_embedder().encode(texts)
 

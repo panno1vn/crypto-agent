@@ -192,9 +192,12 @@ def run_smoke_test() -> None:
 # ---------------------------------------------------------------------------
 
 
+MsgKey = tuple[str, int]  # (channel_name, msg_id)
+
+
 async def get_ground_truth_with_text(
     pool: asyncpg.Pool, coin: str, hours_ago: int
-) -> list[tuple[int, str]]:
+) -> list[tuple[MsgKey, str]]:
     """
     Ground truth khách quan: mọi message thật trong Postgres có nhắc
     `coin` trong cửa sổ `hours_ago` giờ gần nhất, kèm text để phân loại
@@ -203,30 +206,32 @@ async def get_ground_truth_with_text(
     since = datetime.utcnow() - timedelta(hours=hours_ago)
     rows = await pool.fetch(
         """
-        SELECT id, message_text FROM telegram_messages
+        SELECT channel_name, id, message_text FROM telegram_messages
         WHERE $1 = ANY(coins_mentioned) AND created_at >= $2
         """,
         coin,
         since,
     )
-    return [(r["id"], r["message_text"] or "") for r in rows]
+    # Khóa (kênh, msg_id) — nợ #15: msg_id chỉ duy nhất trong 1 kênh, so
+    # khớp chỉ bằng id sẽ tính nhầm tin kênh khác cùng id là "relevant".
+    return [((r["channel_name"], r["id"]), r["message_text"] or "") for r in rows]
 
 
-def precision_at_k(retrieved_ids: list[int], relevant_ids: set[int]) -> float:
+def precision_at_k(retrieved_ids: list[MsgKey], relevant_ids: set[MsgKey]) -> float:
     if not retrieved_ids:
         return 0.0
     hits = sum(1 for i in retrieved_ids if i in relevant_ids)
     return hits / len(retrieved_ids)
 
 
-def recall_at_k(retrieved_ids: list[int], relevant_ids: set[int]) -> float:
+def recall_at_k(retrieved_ids: list[MsgKey], relevant_ids: set[MsgKey]) -> float:
     if not relevant_ids:
         return float("nan")  # không có ground truth → không đo được, không phải 0
     hits = sum(1 for i in retrieved_ids if i in relevant_ids)
     return hits / len(relevant_ids)
 
 
-def reciprocal_rank(retrieved_ids: list[int], relevant_ids: set[int]) -> float:
+def reciprocal_rank(retrieved_ids: list[MsgKey], relevant_ids: set[MsgKey]) -> float:
     for rank, doc_id in enumerate(retrieved_ids, start=1):
         if doc_id in relevant_ids:
             return 1.0 / rank
@@ -322,7 +327,9 @@ async def run_suite_a_and_c(
                 )
                 elapsed_ms = (time.perf_counter() - t0) * 1000
 
-                retrieved_ids = [item["msg_id"] for item in hits]
+                retrieved_ids = [
+                    (item["metadata"]["channel"], item["msg_id"]) for item in hits
+                ]
                 if not retrieved_ids:
                     # Ground truth CÓ thật (đã qua check ở trên) nhưng
                     # Chroma trả về 0 candidate — dấu hiệu embedding lag
