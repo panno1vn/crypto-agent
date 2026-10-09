@@ -129,6 +129,13 @@ def main() -> None:
     import mlflow
 
     mlflow.set_tracking_uri(_require_env("MLFLOW_TRACKING_URI"))
+    # Store rỗng = MLflow đang chạy trên tmpfs, run sẽ mất khi restart
+    # (bug 2026-10-09, xem scripts/manual/preflight_mlflow.py).
+    if mlflow.get_experiment_by_name("Crypto_Agent_Backtesting") is None:
+        raise RuntimeError(
+            "MLflow không có experiment lịch sử Crypto_Agent_Backtesting — "
+            "store rỗng, chạy scripts/manual/preflight_mlflow.py"
+        )
     mlflow.set_experiment(EXPERIMENT)
 
     components = {c: asyncio.run(_load_components(c, args)) for c in args.coins}
