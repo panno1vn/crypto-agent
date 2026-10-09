@@ -7,9 +7,14 @@ Trọng số mặc định — CHỐT Ở N32 (2026-10-08) bằng backtest ablat
 experiment `Crypto_Agent_Ablation_Day32`, cửa sổ cố định 2026-06-06 →
 2026-08-16, 5 coin, 2 chiều, phí 0.1%, 80 lệnh tổng (chi tiết:
 docs/GHI_CHU_NGAY32.md):
-  run 15a7cc6f… ta_only            mean_total_return -1.645%
-  run 070d6b1e… TA .85/sent .15    mean_total_return -2.160%
-  run 6b1afc73… TA .70/.15/.15     mean_total_return -3.381%
+  run 2271ec40… ta_only            mean_total_return -1.645%
+  run 1f4104be… TA .85/sent .15    mean_total_return -2.160%
+  run 57de1968… TA .70/.15/.15     mean_total_return -3.381%
+  (run gốc 10-08 mất vì MLflow chạy trên tmpfs; 3 run trên tái tạo
+  2026-10-09 từ cache CSV, khớp từng dòng.)
+- Kiểm lại 2026-10-09, cửa sổ 06-06 → 10-07 (cùng trọng số): news vẫn kém;
+  sentiment đổi dấu (+1.0 điểm %), chưa đủ để tăng. Run d9104f21…,
+  67776105…, 11f94676…
 - Sentiment không cải thiện ở mọi quantile/trọng số đã thử → hạ về 0.05
   theo điều kiện roadmap. TA-only đo được tốt nhất; giữ 0.05 (không phải 0)
   vì 80 lệnh/~35 ngày đánh giá chưa đủ để kết luận sentiment vô dụng.
